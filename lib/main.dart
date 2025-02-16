@@ -1,18 +1,30 @@
+import 'package:apilize/syntax_highlighter.dart';
+import 'package:apilize/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:file_picker/file_picker.dart';
 import 'dart:convert';
 import 'dart:io';
+import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
+import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:flutter_speed_dial/flutter_speed_dial.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class RequestModel {
   final String id;
   final String name;
   final String url;
   final String method;
-  final Map<String, String> headers;
+  final Map<String, dynamic> headers;
   final dynamic body;
-  final ResponseData response;
+  final DateTime timestamp;
+  final Map<String, String> environment;
+  final ResponseMetrics? metrics;
+  final String? generatedCode;
 
   RequestModel({
     required this.id,
@@ -21,10 +33,59 @@ class RequestModel {
     required this.method,
     required this.headers,
     this.body,
-    required this.response,
-    required int statusCode,
-    double? responseTime,
+    DateTime? timestamp,
+    Map<String, String>? environment,
+    this.metrics,
+    this.generatedCode,
+  })  : this.timestamp = timestamp ?? DateTime.now(),
+        this.environment = environment ?? {};
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'url': url,
+        'method': method,
+        'headers': headers,
+        'body': body ?? '',
+        'timestamp': timestamp.toIso8601String(),
+        'environment': environment,
+        'metrics': metrics?.toJson(),
+        'generatedCode': generatedCode,
+      };
+
+  Future<void> saveToCollection(String collectionName) async {
+    // Save to local storage or database
+  }
+}
+
+class ResponseMetrics {
+  final int statusCode;
+  final double dnsLookup;
+  final double tcpConnection;
+  final double tlsHandshake;
+  final double serverProcessing;
+  final double contentTransfer;
+  final double total;
+
+  ResponseMetrics({
+    required this.statusCode,
+    required this.dnsLookup,
+    required this.tcpConnection,
+    required this.tlsHandshake,
+    required this.serverProcessing,
+    required this.contentTransfer,
+    required this.total,
   });
+
+  Map<String, dynamic> toJson() => {
+        'statusCode': statusCode,
+        'dnsLookup': dnsLookup,
+        'tcpConnection': tcpConnection,
+        'tlsHandshake': tlsHandshake,
+        'serverProcessing': serverProcessing,
+        'contentTransfer': contentTransfer,
+        'total': total,
+      };
 }
 
 class ResponseData {
@@ -97,7 +158,10 @@ class JsonViewTheme {
 }
 
 void main() {
-  runApp(const APIlize());
+  runApp(MaterialApp(
+    theme: AppTheme.getDarkTheme(),
+    home: const APITesterHome(),
+  ));
 }
 
 class APIlize extends StatelessWidget {
@@ -123,12 +187,144 @@ class APITesterHome extends StatefulWidget {
   State<APITesterHome> createState() => _APITesterHomeState();
 }
 
-class _APITesterHomeState extends State<APITesterHome> {
+enum ResponseViewMode { prettyJson, table, treeView, rawText }
+
+class _APITesterHomeState extends State<APITesterHome>
+    with TickerProviderStateMixin {
+  // 2. Declare state variables
+  final TextEditingController _urlController = TextEditingController();
+  final TextEditingController _bodyController = TextEditingController();
+  final Map<String, String> _headers = {};
+  String method = 'GET';
+  String _responseHeaders = '';
+  final List<RequestModel> _history = [];
+  String _response = '';
+  int? _statusCode;
+  double? _responseTime;
+  String _selectedLanguage = 'curl';
+
+  @override
+  void dispose() {
+    _urlController.dispose();
+    _bodyController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Theme.of(context).colorScheme.surface,
+              Theme.of(context).colorScheme.surfaceContainerHighest,
+            ],
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              _buildAnimatedHeader(),
+              Expanded(child: _buildBody()),
+            ],
+          ),
+        ),
+      ),
+      floatingActionButton: _buildSpeedDial(),
+    );
+  }
+
+  Widget _buildAnimatedHeader() {
+    return Hero(
+      tag: 'header',
+      child: Card(
+        margin: const EdgeInsets.all(16),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Theme.of(context).colorScheme.primary,
+                Theme.of(context).colorScheme.tertiary,
+              ],
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.api,
+                size: 32,
+                color: Theme.of(context).colorScheme.onPrimary,
+              ),
+              const SizedBox(width: 16),
+              Text(
+                'APIlize',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onPrimary,
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSpeedDial() {
+    return SpeedDial(
+      icon: Icons.add,
+      activeIcon: Icons.close,
+      backgroundColor: Theme.of(context).colorScheme.primary,
+      foregroundColor: Theme.of(context).colorScheme.onPrimary,
+      activeBackgroundColor: Theme.of(context).colorScheme.error,
+      activeForegroundColor: Theme.of(context).colorScheme.onError,
+      elevation: 8.0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      children: [
+        SpeedDialChild(
+          child: const Icon(Icons.save),
+          backgroundColor: Theme.of(context).colorScheme.secondary,
+          foregroundColor: Theme.of(context).colorScheme.onSecondary,
+          label: 'Save Collection',
+          onTap: () => _saveToCollection(),
+        ),
+        SpeedDialChild(
+          child: const Icon(Icons.code),
+          backgroundColor: Theme.of(context).colorScheme.tertiary,
+          foregroundColor: Theme.of(context).colorScheme.onTertiary,
+          label: 'Generate Code',
+          onTap: () => _showCodeGenerationSheet(),
+        ),
+      ],
+    );
+  }
+
+  late TabController _mainTabController;
+  late TabController _responseTabController;
+  late TabController _previewTabController;
+  late final WebViewController _webViewController;
+
+  @override
+  void initState() {
+    super.initState();
+    _mainTabController = TabController(length: 2, vsync: this);
+    _responseTabController = TabController(length: 3, vsync: this);
+    _previewTabController = TabController(length: 3, vsync: this);
+    _webViewController = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(Colors.white);
+  }
+
   final urlController = TextEditingController();
   String selectedMethod = 'GET';
   String responseBody = '';
   int? statusCode;
-  Map<String, String> headers = {};
   String requestBody = '';
   int? responseStatusCode;
   DateTime? requestStartTime;
@@ -136,36 +332,51 @@ class _APITesterHomeState extends State<APITesterHome> {
   double? responseTime;
   final List<RequestModel> history = [];
   String url = '';
-  String method = 'GET';
+
   String body = '';
+  ResponseViewMode _responseViewMode = ResponseViewMode.prettyJson;
+  ResponseViewMode _viewMode = ResponseViewMode.prettyJson;
+  String _generatedCode = '';
+  bool get isDarkMode => Theme.of(context).brightness == Brightness.dark;
 
-  Future<void> sendRequest() async {
-    try {
-      final Uri url = Uri.parse(urlController.text);
-      late http.Response response;
+  final Map<String, TextStyle> darkCodeTheme = {
+    'keyword': const TextStyle(color: Colors.blue),
+    'string': const TextStyle(color: Colors.green),
+    'number': const TextStyle(color: Colors.orange),
+    'comment': const TextStyle(color: Colors.grey),
+  };
 
-      switch (selectedMethod) {
-        case 'GET':
-          response = await http.get(url);
-          break;
-        case 'POST':
-          response = await http.post(url, body: requestBody);
-          break;
-        case 'PUT':
-          response = await http.put(url, body: requestBody);
-          break;
-        case 'DELETE':
-          response = await http.delete(url);
-          break;
-      }
+  final Map<String, TextStyle> lightCodeTheme = {
+    'keyword': const TextStyle(color: Colors.purple),
+    'string': const TextStyle(color: Colors.green),
+    'number': const TextStyle(color: Colors.blue),
+    'comment': const TextStyle(color: Colors.grey),
+  };
 
-      await _handleResponse(response);
-    } catch (e) {
-      setState(() {
-        responseBody = 'Error: $e';
-        statusCode = null;
-      });
-    }
+  Future<void> _copyCode(String code) async {
+    await Clipboard.setData(ClipboardData(text: code));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Code copied to clipboard')),
+    );
+  }
+
+  Future<void> _exportCode(String language, String code) async {
+    final String fileName = 'request.$language';
+    // Add export logic
+  }
+
+  Future<void> _testGeneratedCode() async {
+    // Add test logic
+  }
+
+  Future<void> _saveAsSnippet() async {
+    // Add save logic
+  }
+
+  String generateCode(String language) {
+    // Add code generation logic
+    return '';
   }
 
   Future<void> _saveResponse() async {
@@ -200,337 +411,70 @@ class _APITesterHomeState extends State<APITesterHome> {
               name: url.split('/').last,
               url: url,
               method: method,
-              headers: headers,
-              body: body,
-              statusCode: responseStatusCode!,
-              responseTime: responseTime,
-              response: ResponseData(
-                  statusCode: responseStatusCode!,
-                  body: responseBody,
-                  headers: responseHeaders,
-                  time: responseTime!)));
+              headers: _headers,
+              body: requestBody,
+              metrics: null,
+              generatedCode: null));
     });
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 3,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('API Client'),
-          bottom: const TabBar(
-            tabs: [
-              Tab(icon: Icon(Icons.send), text: 'Request'),
-              Tab(icon: Icon(Icons.history), text: 'History'),
-              Tab(icon: Icon(Icons.folder), text: 'Collections'),
-            ],
+  Widget _buildNarrowLayout() {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('API Client'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.code),
+            onPressed: _showCodeGenerationSheet,
           ),
-        ),
-        body: TabBarView(
-          children: [
-            _buildRequestTab(),
-            _buildHistoryTab(),
-            _buildCollectionsTab(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRequestTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildEnvironmentSelector(),
-          const SizedBox(height: 16),
-          _buildUrlBar(),
-          const SizedBox(height: 16),
-          _buildHeadersSection(),
-          const SizedBox(height: 16),
-          _buildBodySection(),
-          const SizedBox(height: 16),
-          _buildSendButton(),
-          if (responseBody.isNotEmpty) _buildResponseSection(),
         ],
       ),
-    );
-  }
-
-  Widget _buildEnvironmentSelector() {
-    return DropdownButton<String>(
-      value: 'Default',
-      items: ['Default', 'Development', 'Production']
-          .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-          .toList(),
-      onChanged: (value) {
-        // TODO: Implement environment switching
-      },
-    );
-  }
-
-  Widget _buildHeadersSection() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Headers',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
-                TextButton.icon(
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add Header'),
-                  onPressed: () {
-                    setState(() {
-                      headers['New Header'] = '';
-                    });
-                  },
-                ),
-              ],
-            ),
-            const Divider(),
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: headers.length,
-              itemBuilder: (context, index) {
-                String key = headers.keys.elementAt(index);
-                return Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        decoration: const InputDecoration(labelText: 'Key'),
-                        controller: TextEditingController(text: key),
-                        onChanged: (newKey) {
-                          final value = headers[key];
-                          setState(() {
-                            headers.remove(key);
-                            headers[newKey] = value!;
-                          });
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextField(
-                        decoration: const InputDecoration(labelText: 'Value'),
-                        controller: TextEditingController(text: headers[key]),
-                        onChanged: (value) {
-                          setState(() {
-                            headers[key] = value;
-                          });
-                        },
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.delete),
-                      onPressed: () {
-                        setState(() {
-                          headers.remove(key);
-                        });
-                      },
-                    ),
-                  ],
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBodySection() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Body', style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            TextField(
-              maxLines: 5,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                hintText: 'Enter request body',
-              ),
-              onChanged: (value) {
-                setState(() {
-                  requestBody = value;
-                });
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildResponseSection() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Response (${responseStatusCode ?? "N/A"})',
-                    style: const TextStyle(fontWeight: FontWeight.bold)),
-                Text('${responseTime?.toStringAsFixed(2) ?? "N/A"} ms'),
-              ],
-            ),
-            const Divider(),
-            const Text('Headers:'),
-            ...responseHeaders.entries.map((e) => Text('${e.key}: ${e.value}')),
-            const SizedBox(height: 8),
-            const Text('Body:'),
-            SelectableText(responseBody),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHistoryTab() {
-    return ListView.builder(
-      itemCount: history.length,
-      itemBuilder: (context, index) {
-        final request = history[index];
-        return ListTile(
-          leading: Icon(_getMethodIcon(request.method)),
-          title: Text(request.url),
-          subtitle: Text(request.method),
-          trailing: Text(request.name),
-          onTap: () => _loadRequest(request),
-        );
-      },
-    );
-  }
-
-  Widget _buildCollectionsTab() {
-    return const Center(
-      child: Text('Collections feature coming soon'),
-    );
-  }
-
-  IconData _getMethodIcon(String method) {
-    switch (method) {
-      case 'GET':
-        return Icons.download;
-      case 'POST':
-        return Icons.add;
-      case 'PUT':
-        return Icons.edit;
-      case 'DELETE':
-        return Icons.delete;
-      default:
-        return Icons.http;
-    }
-  }
-
-  void _loadRequest(RequestModel request) {
-    setState(() {
-      url = request.url;
-      method = request.method;
-      headers.clear();
-      headers.addAll(
-          request.headers.map((key, value) => MapEntry(key, value.toString())));
-      body = request.body?.toString() ?? '';
-    });
-  }
-
-  Widget _buildRequestPanel() {
-    return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _buildUrlBar(),
-            const SizedBox(height: 16),
-            _buildTabSection(),
-            const SizedBox(height: 16),
-            _buildSendButton(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildUrlBar() {
-    return Row(
-      children: [
-        Expanded(
-          child: TextFormField(
-            controller: urlController,
-            decoration: InputDecoration(
-              labelText: 'URL',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
+      body: Column(
+        children: [
+          _buildCollapsibleUrlBar(),
+          Expanded(
+            child: _buildRequestResponseTabs(),
           ),
-        ),
-        const SizedBox(width: 8),
-        DropdownButton<String>(
-          value: selectedMethod,
-          items: ['GET', 'POST', 'PUT', 'DELETE']
-              .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-              .toList(),
-          onChanged: (value) => setState(() => selectedMethod = value!),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _sendRequest,
+        child: const Icon(Icons.send),
+      ),
+    );
+  }
+
+  Widget _buildCollapsibleUrlBar() {
+    return ExpansionTile(
+      title:
+          Text(urlController.text.isEmpty ? 'Enter URL' : urlController.text),
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: _buildUrlBar(),
         ),
       ],
     );
   }
 
-  Widget _buildResponsePanel() {
-    return Container(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text('Status: ${statusCode ?? "N/A"}',
-              style: Theme.of(context).textTheme.titleMedium),
-          const Divider(),
-          Expanded(
-            child: SingleChildScrollView(
-              child: SelectableText(
-                responseBody,
-                style: const TextStyle(fontFamily: 'monospace'),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTabSection() {
+  Widget _buildRequestResponseTabs() {
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Column(
         children: [
           const TabBar(
             tabs: [
               Tab(text: 'Headers'),
               Tab(text: 'Body'),
+              Tab(text: 'Response'),
             ],
           ),
-          SizedBox(
-            height: 200,
+          Expanded(
             child: TabBarView(
               children: [
-                _buildHeadersEditor(),
+                _buildHeadersList(),
                 _buildBodyEditor(),
+                _buildResponseView(),
               ],
             ),
           ),
@@ -539,185 +483,483 @@ class _APITesterHomeState extends State<APITesterHome> {
     );
   }
 
-  Widget _buildSendButton() {
-    return ElevatedButton(
-      onPressed: sendRequest,
-      child: const Text('Send Request'),
+  Future<void> _showCodeGenerationSheet() async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (BuildContext context) => _buildCodeGenerationPanel(),
     );
   }
 
-  Widget _buildHeadersEditor() {
-    return ListView.builder(
-      itemCount: headers.length + 1,
-      itemBuilder: (context, index) {
-        if (index == headers.length) {
-          return ListTile(
-            title: ElevatedButton(
-              onPressed: () {
-                setState(() {
-                  headers['New Header'] = '';
-                });
-              },
-              child: const Text('Add Header'),
-            ),
-          );
-        }
-
-        String key = headers.keys.elementAt(index);
-        return ListTile(
-          title: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  decoration: const InputDecoration(labelText: 'Key'),
-                  controller: TextEditingController(text: key),
-                  onChanged: (newKey) {
-                    String value = headers[key]!;
-                    setState(() {
-                      headers.remove(key);
-                      headers[newKey] = value;
-                    });
+  Widget _buildHeadersList() {
+    return Column(
+      children: [
+        Expanded(
+          child: _headers.isEmpty
+              ? const Center(
+                  child: Text('No headers added yet'),
+                )
+              : ListView.builder(
+                  itemCount: _headers.length,
+                  itemBuilder: (context, index) {
+                    final header = _headers.entries.elementAt(index);
+                    return ListTile(
+                      title: Text(header.key),
+                      subtitle: Text(header.value),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.edit),
+                            onPressed: () =>
+                                _editHeader(header.key, header.value),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete),
+                            onPressed: () => setState(() {
+                              _headers.remove(header.key);
+                            }),
+                          ),
+                        ],
+                      ),
+                    );
                   },
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: TextField(
-                  decoration: const InputDecoration(labelText: 'Value'),
-                  controller: TextEditingController(text: headers[key]),
-                  onChanged: (value) {
-                    setState(() {
-                      headers[key] = value;
-                    });
-                  },
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.delete),
-                onPressed: () {
-                  setState(() {
-                    headers.remove(key);
-                  });
-                },
-              ),
-            ],
+        ),
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: ElevatedButton.icon(
+            icon: const Icon(Icons.add),
+            label: const Text('Add Header'),
+            onPressed: _showAddHeaderDialog,
           ),
-        );
-      },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWideLayout() {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('API Client - Wide Layout'),
+      ),
+      body: Row(
+        children: [
+          Expanded(child: _buildRequestResponseTabs()),
+        ],
+      ),
+    );
+  }
+
+  void _handleUrlChange(String value) {
+    setState(() {
+      url = value;
+    });
+  }
+
+  void _handleBodyChange(String value) {
+    setState(() {
+      body = value;
+    });
+  }
+
+  Widget _buildUrlBar() {
+    return TextField(
+      controller: _urlController,
+      onChanged: _handleUrlChange,
+      decoration: const InputDecoration(
+        labelText: 'URL',
+        border: OutlineInputBorder(),
+      ),
     );
   }
 
   Widget _buildBodyEditor() {
     return TextField(
+      controller: _bodyController,
+      onChanged: _handleBodyChange,
       maxLines: null,
       decoration: const InputDecoration(
-        border: OutlineInputBorder(),
         hintText: 'Enter request body',
       ),
-      onChanged: (value) {
+    );
+  }
+
+  Widget _buildResponseView() {
+    if (_response.isEmpty) {
+      return const Center(
+        child: Text('Send a request to see the response'),
+      );
+    }
+
+    return Column(
+      children: [
+        TabBar(
+          controller: _responseTabController,
+          tabs: const [
+            Tab(text: 'JSON'),
+            Tab(text: 'Raw'),
+            Tab(text: 'Preview'),
+          ],
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _responseTabController,
+            children: [
+              _buildPrettyResponse(),
+              _buildRawResponse(),
+              _buildPreviewResponse(),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPrettyResponse() {
+    if (_response.isEmpty) return const SizedBox();
+
+    try {
+      final jsonData = json.decode(_response);
+      return SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: JsonView(
+            json: jsonData,
+            theme: JsonViewTheme(
+              backgroundColor: Theme.of(context).cardColor,
+              stringStyle: const TextStyle(color: Colors.green),
+              numberStyle: const TextStyle(color: Colors.blue),
+              boolStyle: const TextStyle(color: Colors.red),
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      return SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Text(_response),
+        ),
+      );
+    }
+  }
+
+  Widget _buildRawResponse() {
+    final StringBuffer rawResponse = StringBuffer();
+    final uri = Uri.tryParse(_urlController.text);
+
+    // Request Section
+    rawResponse.writeln('REQUEST');
+    rawResponse.writeln('=======\n');
+    rawResponse.writeln('${method.toUpperCase()} ${uri?.path ?? ''} HTTP/1.1');
+    rawResponse.writeln('Host: ${uri?.host ?? ''}');
+
+    // Query Parameters
+    if (uri?.queryParameters.isNotEmpty ?? false) {
+      rawResponse.writeln('\nQuery Parameters:');
+      uri!.queryParameters.forEach((key, value) {
+        rawResponse.writeln('$key: $value');
+      });
+    }
+
+    // Request Headers
+    rawResponse.writeln('\nRequest Headers:');
+    rawResponse.writeln('-------------');
+    _headers.forEach((key, value) {
+      rawResponse.writeln('$key: $value');
+    });
+
+    // Request Body
+    if (_bodyController.text.isNotEmpty) {
+      rawResponse.writeln('\nRequest Body:');
+      rawResponse.writeln('-------------');
+      rawResponse.writeln(_bodyController.text);
+    }
+
+    // Response Section
+    rawResponse.writeln('\n\nRESPONSE');
+    rawResponse.writeln('========\n');
+
+    // Status Line
+    rawResponse.writeln('HTTP/1.1 $_statusCode');
+
+    // Response Headers
+    rawResponse.writeln('\nResponse Headers:');
+    rawResponse.writeln('---------------');
+    responseHeaders.forEach((key, value) {
+      rawResponse.writeln('$key: $value');
+    });
+
+    // Response Body
+    rawResponse.writeln('\nResponse Body:');
+    rawResponse.writeln('-------------');
+    rawResponse.writeln(_response);
+
+    // Metrics
+    rawResponse.writeln('\nMETRICS');
+    rawResponse.writeln('=======');
+    rawResponse
+        .writeln('Time: ${_responseTime?.toStringAsFixed(2) ?? 'N/A'} ms');
+    rawResponse.writeln('Size: ${_response.length} bytes');
+    rawResponse
+        .writeln('Content-Type: ${responseHeaders['content-type'] ?? 'N/A'}');
+
+    return SingleChildScrollView(
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: SelectableText(
+          rawResponse.toString(),
+          style: TextStyle(
+            fontFamily: 'monospace',
+            fontSize: 13,
+            height: 1.5,
+            color: Theme.of(context).colorScheme.onSurface,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPreviewResponse() {
+    if (_response.isEmpty) return const SizedBox();
+
+    try {
+      final dynamic jsonData = json.decode(_response);
+
+      if (jsonData is List) {
+        return _buildJsonTable(jsonData);
+      } else if (jsonData is Map) {
+        return _buildJsonTable([jsonData]);
+      } else {
+        return Center(
+            child: Text('Cannot display as table: ${jsonData.runtimeType}'));
+      }
+    } catch (e) {
+      return Center(child: Text('Invalid JSON: $e'));
+    }
+  }
+
+  Widget _buildJsonTable(List<dynamic> data) {
+    if (data.isEmpty) return const Center(child: Text('No data'));
+
+    // Get all unique keys from all objects
+    final Set<String> keys = {};
+    for (var item in data) {
+      if (item is Map) {
+        keys.addAll(item.keys.map((e) => e.toString()));
+      }
+    }
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: SingleChildScrollView(
+        child: DataTable(
+          columns: keys
+              .map(
+                (key) => DataColumn(
+                  label: Text(
+                    key,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              )
+              .toList(),
+          rows: data.map((item) {
+            if (item is! Map)
+              return DataRow(cells: [DataCell(Text(item.toString()))]);
+
+            return DataRow(
+              cells: keys.map((key) {
+                final value = item[key];
+                String displayText = '';
+
+                if (value == null) {
+                  displayText = 'null';
+                } else if (value is Map || value is List) {
+                  displayText = json.encode(value);
+                } else {
+                  displayText = value.toString();
+                }
+
+                return DataCell(
+                  Text(
+                    displayText,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  onTap: () {
+                    if (value is Map || value is List) {
+                      showDialog(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: Text(key),
+                          content: SingleChildScrollView(
+                            child: Text(
+                              const JsonEncoder.withIndent('  ').convert(value),
+                            ),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('Close'),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                  },
+                );
+              }).toList(),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCodeGenerationPanel() {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Language selector at the top
+            _buildLanguageSelector(),
+            const SizedBox(height: 16),
+
+            // Code preview in scrollable container
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.grey[900],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: SingleChildScrollView(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: SelectableText(
+                      _generateCode(_selectedLanguage),
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        color: Colors.white,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            // Action buttons at bottom
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.copy),
+                  tooltip: 'Copy to clipboard',
+                  onPressed: () => _copyCode(_generateCode(_selectedLanguage)),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.download),
+                  tooltip: 'Download code',
+                  onPressed: () => _exportCode(
+                      _selectedLanguage, _generateCode(_selectedLanguage)),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.share),
+                  tooltip: 'Share code',
+                  onPressed: () =>
+                      Share.share(_generateCode(_selectedLanguage)),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLanguageSelector() {
+    return SegmentedButton<String>(
+      segments: [
+        ButtonSegment(value: 'curl', label: const Text('cURL')),
+        ButtonSegment(value: 'dart', label: const Text('Dart')),
+        ButtonSegment(value: 'python', label: const Text('Python')),
+        ButtonSegment(value: 'javascript', label: const Text('JS')),
+      ],
+      selected: {_selectedLanguage},
+      onSelectionChanged: (Set<String> value) {
         setState(() {
-          requestBody = value;
+          _selectedLanguage = value.first;
+          _generatedCode = generateCode(_selectedLanguage);
         });
       },
     );
   }
 
-  Widget _buildResponseView() {
-    if (responseBody == null) return const SizedBox.shrink();
+  Future<void> _sendRequest() async {
+    setState(() {
+      _statusCode = null;
+      _response = '';
+      _responseTime = null;
+    });
 
-    return Card(
-      margin: const EdgeInsets.all(8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ListTile(
-            title: Text('Status: $responseStatusCode'),
-            subtitle: Text('Time: ${responseTime?.toStringAsFixed(2)}ms'),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.copy),
-                  onPressed: () => _copyToClipboard(responseBody!),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.save),
-                  onPressed: _saveResponse,
-                ),
-              ],
-            ),
-          ),
-          const Divider(),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: _buildFormattedResponse(),
-          ),
-        ],
-      ),
-    );
-  }
+    final startTime = DateTime.now();
 
-  void _copyToClipboard(String text) {
-    Clipboard.setData(ClipboardData(text: text));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Copied to clipboard')),
-    );
-  }
-
-  Widget _buildFormattedResponse() {
     try {
-      final jsonData = json.decode(responseBody!);
-      return JsonView(
-        json: jsonData,
-        theme: JsonViewTheme(
-          backgroundColor: Theme.of(context).cardColor,
-          stringStyle: const TextStyle(color: Colors.green),
-          numberStyle: const TextStyle(color: Colors.blue),
-          boolStyle: const TextStyle(color: Colors.red),
-        ),
-      );
+      final uri = Uri.parse(_urlController.text);
+      http.Response response;
+
+      switch (method.toUpperCase()) {
+        case 'GET':
+          response = await http.get(uri, headers: _headers);
+          break;
+        case 'POST':
+          response = await http.post(uri,
+              headers: _headers, body: _bodyController.text);
+          break;
+        case 'PUT':
+          response = await http.put(uri,
+              headers: _headers, body: _bodyController.text);
+          break;
+        case 'DELETE':
+          response = await http.delete(uri, headers: _headers);
+          break;
+        default:
+          throw ArgumentError('Unsupported HTTP method: $method');
+      }
+
+      final endTime = DateTime.now();
+
+      setState(() {
+        _statusCode = response.statusCode;
+        _responseHeaders = response.headers.toString();
+        _response = response.body;
+        _responseTime = endTime.difference(startTime).inMilliseconds.toDouble();
+        _history.insert(
+          0,
+          RequestModel(
+            id: DateTime.now().toString(),
+            name: uri.path.split('/').last,
+            url: _urlController.text,
+            method: method,
+            headers: Map<String, dynamic>.from(_headers),
+            body: _bodyController.text,
+          ),
+        );
+      });
     } catch (e) {
-      return SelectableText(responseBody!);
+      setState(() {
+        _response = 'Error: $e';
+      });
     }
-  }
-}
-
-class ApiClient extends StatefulWidget {
-  const ApiClient({super.key});
-
-  @override
-  State<ApiClient> createState() => _ApiClientHomeState();
-}
-
-class _ApiClientHomeState extends State<ApiClient> {
-  // State variables
-  final TextEditingController _urlController = TextEditingController();
-  final TextEditingController _bodyController = TextEditingController();
-
-  String _method = 'GET';
-  String _url = '';
-  String _body = '';
-  bool _isLoading = false;
-  String? _response;
-  double? _responseTime;
-  int? _responseStatusCode;
-  Map<String, String> _headers = {};
-  Map<String, String> _responseHeaders = {};
-  final List<RequestModel> _requestHistory = [];
-  String? _responseBody;
-  DateTime? _requestStartTime;
-
-  @override
-  void initState() {
-    super.initState();
-    _method = 'GET';
-  }
-
-  @override
-  void dispose() {
-    _urlController.dispose();
-    _bodyController.dispose();
-    super.dispose();
   }
 
   Future<void> _showAddHeaderDialog() async {
@@ -760,161 +1002,394 @@ class _ApiClientHomeState extends State<ApiClient> {
     );
   }
 
-  Future<void> _sendRequest() async {
-    setState(() {
-      _isLoading = true;
-      _requestStartTime = DateTime.now();
-    });
+  Future<void> _editHeader(String key, String value) async {
+    final keyController = TextEditingController(text: key);
+    final valueController = TextEditingController(text: value);
 
-    try {
-      final response = await http.get(Uri.parse(_urlController.text));
-      await _handleResponse(response);
-    } catch (e) {
-      setState(() {
-        _responseBody = 'Error: $e';
-        _isLoading = false;
-      });
-    }
-  }
-
-  Future<void> _handleResponse(http.Response response) async {
-    if (!mounted) return;
-
-    setState(() {
-      _responseHeaders = response.headers;
-      _responseBody = response.body;
-      _responseTime = _requestStartTime != null
-          ? DateTime.now()
-              .difference(_requestStartTime!)
-              .inMilliseconds
-              .toDouble()
-          : null;
-      _isLoading = false;
-    });
-
-    // Add to history
-    _requestHistory.add(RequestModel(
-      id: DateTime.now().toString(),
-      name: Uri.parse(_urlController.text).pathSegments.lastOrNull ?? 'Unnamed',
-      url: _urlController.text,
-      method: _method,
-      headers: _headers,
-      body: _bodyController.text,
-      response: ResponseData(
-        statusCode: response.statusCode,
-        body: _responseBody ?? '',
-        headers: response.headers,
-        time: _responseTime ?? 0,
-      ),
-      statusCode: response.statusCode,
-      responseTime: _responseTime,
-    ));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('API Client'),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Header'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _urlController,
-                    decoration: const InputDecoration(
-                      labelText: 'URL',
-                      border: OutlineInputBorder(),
-                    ),
-                    onChanged: (value) => _url = value,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                DropdownButton<String>(
-                  value: _method,
-                  items: ['GET', 'POST', 'PUT', 'DELETE']
-                      .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                      .toList(),
-                  onChanged: (value) => setState(() => _method = value!),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('Headers',
-                            style: TextStyle(fontWeight: FontWeight.bold)),
-                        TextButton(
-                          onPressed: _showAddHeaderDialog,
-                          child: const Text('Add Header'),
-                        ),
-                      ],
-                    ),
-                    ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: _headers.length,
-                      itemBuilder: (context, index) {
-                        final key = _headers.keys.elementAt(index);
-                        return ListTile(
-                          title: Text(key),
-                          subtitle: Text(_headers[key]!),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.delete),
-                            onPressed: () =>
-                                setState(() => _headers.remove(key)),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
             TextField(
-              controller: _bodyController,
-              maxLines: 5,
-              decoration: const InputDecoration(
-                labelText: 'Body',
-                border: OutlineInputBorder(),
-              ),
-              onChanged: (value) => _body = value,
+              controller: keyController,
+              decoration: const InputDecoration(labelText: 'Key'),
             ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _isLoading ? null : _sendRequest,
-              child: _isLoading
-                  ? const CircularProgressIndicator()
-                  : const Text('Send Request'),
+            TextField(
+              controller: valueController,
+              decoration: const InputDecoration(labelText: 'Value'),
             ),
-            if (_responseBody != null) ...[
-              const SizedBox(height: 16),
-              Text('Response Time: ${_responseTime?.toStringAsFixed(2)} ms'),
-              const SizedBox(height: 8),
-              Expanded(
-                child: SingleChildScrollView(
-                  child: SelectableText(_responseBody!),
-                ),
-              ),
-            ],
           ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              setState(() {
+                _headers.remove(key);
+                _headers[keyController.text] = valueController.text;
+              });
+              Navigator.pop(context);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _generateCode(String language) {
+    final StringBuffer code = StringBuffer();
+
+    switch (language) {
+      case 'curl':
+        code.write('curl -X $method ');
+        _headers.forEach((key, value) {
+          code.write('-H "$key: $value" ');
+        });
+        if (body.isNotEmpty) {
+          code.write('-d \'$body\' ');
+        }
+        code.write('"$url"');
+        break;
+
+      case 'python':
+        code.writeln('import requests\n');
+        code.writeln('url = "$url"');
+        if (_headers.isNotEmpty) {
+          code.writeln('headers = ${_headers.toString()}');
+        }
+        if (body.isNotEmpty) {
+          code.writeln('payload = \'$body\'');
+        }
+        code.writeln('\nresponse = requests.${method.toLowerCase()}(');
+        code.writeln('    url,');
+        if (_headers.isNotEmpty) code.writeln('    headers=headers,');
+        if (body.isNotEmpty) code.writeln('    data=payload,');
+        code.writeln(')');
+        code.writeln('\nprint(response.status_code)');
+        code.writeln('print(response.text)');
+        break;
+
+      default:
+        code.write('Unsupported language');
+    }
+
+    return code.toString();
+  }
+
+  Widget _buildCodePreview() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.grey[900],
+        borderRadius: BorderRadius.circular(8),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: SingleChildScrollView(
+        child: SelectableText(
+          _generateCode(_selectedLanguage),
+          style: const TextStyle(
+            fontFamily: 'monospace',
+            color: Colors.white,
+            fontSize: 14,
+          ),
         ),
       ),
     );
   }
 
-  // Rest of the widget building methods remain the same
-  // but are now properly referenced in the build method
+  Widget _buildCodeActions() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        IconButton(
+          icon: const Icon(Icons.copy),
+          tooltip: 'Copy to clipboard',
+          onPressed: () {
+            Clipboard.setData(ClipboardData(
+              text: _generateCode(_selectedLanguage),
+            ));
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Code copied to clipboard')),
+            );
+          },
+        ),
+        IconButton(
+          icon: const Icon(Icons.download),
+          tooltip: 'Download code',
+          onPressed: () async {
+            try {
+              final code = _generateCode(_selectedLanguage);
+              final extension = _selectedLanguage == 'curl'
+                  ? 'sh'
+                  : _selectedLanguage == 'python'
+                      ? 'py'
+                      : 'txt';
+              final directory = await getApplicationDocumentsDirectory();
+              final file = File('${directory.path}/request.$extension');
+              await file.writeAsString(code);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Saved to ${file.path}')),
+              );
+            } catch (e) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Error saving file: $e')),
+              );
+            }
+          },
+        ),
+        IconButton(
+          icon: const Icon(Icons.share),
+          tooltip: 'Share code',
+          onPressed: () {
+            Share.share(_generateCode(_selectedLanguage));
+          },
+        ),
+      ],
+    );
+  }
+
+  Future<void> _saveToCollection() async {
+    final nameController = TextEditingController();
+
+    final bool? result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Save to Collection'),
+        content: TextField(
+          controller: nameController,
+          decoration: const InputDecoration(
+              labelText: 'Collection Name', hintText: 'Enter collection name'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true && mounted) {
+      try {
+        final collection = {
+          'name': nameController.text,
+          'request': {
+            'url': urlController.text,
+            'method': selectedMethod,
+            'headers': _headers,
+            'body': requestBody,
+          }
+        };
+
+        // Save to local storage
+        final prefs = await SharedPreferences.getInstance();
+        final collections = prefs.getStringList('collections') ?? [];
+        collections.add(jsonEncode(collection));
+        await prefs.setStringList('collections', collections);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Saved to collection')),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error saving: $e')),
+        );
+      }
+    }
+  }
+
+  Widget _buildBody() {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Request Section
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // URL and Method Row
+                  Row(
+                    children: [
+                      // Method Dropdown
+                      DropdownButton<String>(
+                        value: method,
+                        items: ['GET', 'POST', 'PUT', 'DELETE']
+                            .map((e) =>
+                                DropdownMenuItem(value: e, child: Text(e)))
+                            .toList(),
+                        onChanged: (value) => setState(() => method = value!),
+                      ),
+                      const SizedBox(width: 16),
+                      // URL TextField
+                      Expanded(
+                        child: TextField(
+                          controller: _urlController,
+                          decoration: const InputDecoration(
+                            labelText: 'URL',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  // Headers Section
+                  ExpansionTile(
+                    title: const Text('Headers'),
+                    children: [
+                      _buildHeadersList(),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  // Body Section
+                  ExpansionTile(
+                    title: const Text('Request Body'),
+                    children: [
+                      TextField(
+                        controller: _bodyController,
+                        maxLines: 5,
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          hintText: 'Enter request body',
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Send Button
+          ElevatedButton(
+            onPressed: _sendRequest,
+            child: const Text('Send Request'),
+          ),
+          const SizedBox(height: 16),
+          // Response Section
+          if (_response.isNotEmpty)
+            Expanded(
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Status: $_statusCode'),
+                      if (_responseTime != null)
+                        Text('Time: ${_responseTime!.toStringAsFixed(2)}ms'),
+                      const Divider(),
+                      Expanded(child: _buildResponseView()),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }
+
+// class ApiTester extends StatefulWidget {
+//   const ApiTester({Key? key}) : super(key: key);
+
+//   @override
+//   State<ApiTester> createState() => _ApiTesterHomeState();
+// }
+
+// class _ApiTesterHomeState extends State<ApiTester>
+//     with TickerProviderStateMixin {
+//   // Add state variables
+//   final TextEditingController _urlController = TextEditingController();
+//   final TextEditingController _bodyController = TextEditingController();
+//   late TabController _mainTabController;
+//   late TabController _responseTabController;
+//   late TabController _previewTabController;
+//   late final WebViewController _webViewController;
+//   String _url = '';
+//   String _method = 'GET';
+//   String _body = '';
+//   Map<String, String> _headers = {};
+//   String _response = '';
+//   int? _statusCode;
+//   double? _responseTime;
+//   final List<RequestModel> _history = [];
+//   String _selectedLanguage = 'curl';
+
+//   @override
+//   void initState() {
+//     super.initState();
+//     _mainTabController = TabController(length: 2, vsync: this);
+//     _responseTabController = TabController(length: 3, vsync: this);
+//     _previewTabController = TabController(length: 3, vsync: this);
+//     _webViewController = WebViewController()
+//       ..setJavaScriptMode(JavaScriptMode.unrestricted)
+//       ..setBackgroundColor(Colors.white);
+//   }
+
+//   @override
+//   void dispose() {
+//     _mainTabController.dispose();
+//     _responseTabController.dispose();
+//     _previewTabController.dispose();
+//     _urlController.dispose();
+//     _bodyController.dispose();
+//     super.dispose();
+//   }
+
+//   void _handleUrlChange(String value) {
+//     setState(() {
+//       _url = value;
+//     });
+//   }
+
+//   void _handleBodyChange(String value) {
+//     setState(() {
+//       _body = value;
+//     });
+//   }
+
+//   @override
+//   Widget build(BuildContext context) {
+//     return Scaffold(
+//       appBar: AppBar(
+//         title: const Text('API Tester'),
+//       ),
+//       body: Column(
+//         children: [
+//           TextField(
+//             controller: _urlController,
+//             onChanged: _handleUrlChange,
+//             decoration: const InputDecoration(
+//               labelText: 'URL',
+//               border: OutlineInputBorder(),
+//             ),
+//           ),
+//           TextField(
+//             controller: _bodyController,
+//             onChanged: _handleBodyChange,
+//             decoration: const InputDecoration(
+//               labelText: 'Body',
+//               border: OutlineInputBorder(),
+//             ),
+//           ),
+//         ],
+//       ),
+//     );
+//   }
+// }
