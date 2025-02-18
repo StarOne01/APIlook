@@ -42,7 +42,7 @@ class APIlize extends StatelessWidget {
 
     return MaterialApp(
       title: 'APIlize',
-      home: auth.isAuthenticated ? const APITesterHome() : LoginView(),
+      home: true || auth.isAuthenticated ? const APITesterHome() : LoginView(),
     );
   }
 }

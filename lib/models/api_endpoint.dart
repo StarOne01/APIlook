@@ -4,6 +4,7 @@ class APIEndpoint {
   final String name;
   final String url;
   final String method;
+  final String logic;
   final Map<String, dynamic> headers;
   final Map<String, dynamic> parameters;
   final DateTime createdAt;
@@ -15,6 +16,7 @@ class APIEndpoint {
     required this.name,
     required this.url,
     required this.method,
+    required this.logic,
     this.headers = const {},
     this.parameters = const {},
     required this.createdAt,
@@ -27,6 +29,7 @@ class APIEndpoint {
         'name': name,
         'url': url,
         'method': method,
+        'logic': logic,
         'headers': headers,
         'parameters': parameters,
         'active': active,
@@ -38,9 +41,13 @@ class APIEndpoint {
         name: json['name'],
         url: json['url'],
         method: json['method'],
+        logic: json['logic'] ?? '',
         headers: json['headers'] ?? {},
         parameters: json['parameters'] ?? {},
         createdAt: DateTime.parse(json['created_at']),
         active: json['active'] ?? true,
       );
+
+  bool get isLocalhost =>
+      Uri.parse(url).host == 'localhost' || Uri.parse(url).host == '127.0.0.1';
 }

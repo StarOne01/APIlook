@@ -10,14 +10,9 @@ class LoginView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Row(
-        children: [
-          // Right panel - Sign up
-          Expanded(
-            child: LoginPanel(),
-          ),
-        ],
-      ),
+      resizeToAvoidBottomInset: true, // Enables resize when keyboard appears
+
+      body: LoginPanel(),
     );
   }
 }
@@ -27,9 +22,11 @@ class LoginPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SafeArea(
+        child: Container(
       padding: EdgeInsets.all(32),
-      child: Column(
+      child: SingleChildScrollView(
+          child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text('Welcome Back',
@@ -46,8 +43,8 @@ class LoginPanel extends StatelessWidget {
             child: Text("Create Account"),
           ),
         ],
-      ),
-    );
+      )),
+    ));
   }
 }
 
@@ -57,33 +54,36 @@ class SignupPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          border: Border(
-            left: BorderSide(
-              color: Theme.of(context).dividerColor,
+        resizeToAvoidBottomInset: true, // Enables resize when keyboard appears
+        body: SafeArea(
+          child: SingleChildScrollView(
+              child: Container(
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              border: Border(
+                left: BorderSide(
+                  color: Theme.of(context).dividerColor,
+                ),
+              ),
             ),
-          ),
-        ),
-        padding: EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text('Create Account',
-                style: Theme.of(context).textTheme.headlineMedium),
-            SizedBox(height: 32),
-            SignupForm(),
-            Divider(height: 32),
-            SocialAuthButtons(),
-            Text("Already a Member? "),
-            OutlinedButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text("Back to Login")),
-          ],
-        ),
-      ),
-    );
+            padding: EdgeInsets.all(32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text('Create Account',
+                    style: Theme.of(context).textTheme.headlineMedium),
+                SizedBox(height: 32),
+                SignupForm(),
+                Divider(height: 32),
+                SocialAuthButtons(),
+                Text("Already a Member? "),
+                OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text("Back to Login")),
+              ],
+            ),
+          )),
+        ));
   }
 }
 
