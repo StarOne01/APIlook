@@ -16,23 +16,18 @@ class CreateAPIPage extends StatefulWidget {
 }
 
 class _CreateAPIPageState extends State<CreateAPIPage> {
-  // Initialize controllers in constructor
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _urlController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
-  // Initialize other state variables
   String _selectedMethod = 'GET';
   final Map<String, String> _headers = {};
   final Map<String, String> _parameters = {};
   bool _isPublic = false;
   String? _testResponse;
 
-  // Initialize server
   final LocalAPIServer _localServer = LocalAPIServer();
-
-  // Add state variables
   bool _isTestMode = false;
 
   @override
@@ -43,7 +38,6 @@ class _CreateAPIPageState extends State<CreateAPIPage> {
 
   @override
   void dispose() {
-    // Clean up controllers
     _nameController.dispose();
     _descriptionController.dispose();
     _urlController.dispose();
@@ -60,7 +54,6 @@ function handleRequest(req, res) {
 }
 ''';
 
-  // Add new controllers
   final _responseExampleController = TextEditingController();
 
   @override
@@ -83,14 +76,12 @@ function handleRequest(req, res) {
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
-          // Use column layout for mobile (<600dp width)
           if (constraints.maxWidth < 600) {
             return SingleChildScrollView(
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   children: [
-                    // API Configuration Form
                     Form(
                       key: _formKey,
                       child: Column(
@@ -142,21 +133,17 @@ function handleRequest(req, res) {
                       ),
                     ),
                     const SizedBox(height: 24),
-                    // Code Workspace
                     SizedBox(
-                      height: 300, // Fixed height for mobile
+                      height: 400,
                       child: _buildWorkspace(),
                     ),
                     const SizedBox(height: 16),
-                    // Test Section
                     _buildTestSection(),
                   ],
                 ),
               ),
             );
-          }
-          // Use row layout for desktop (>=600dp width)
-          else {
+          } else {
             return Row(
               children: [
                 Expanded(
@@ -168,7 +155,6 @@ function handleRequest(req, res) {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Original form fields...
                           TextFormField(
                             controller: _nameController,
                             decoration: const InputDecoration(
@@ -178,23 +164,59 @@ function handleRequest(req, res) {
                             validator: (value) =>
                                 value?.isEmpty ?? true ? 'Required' : null,
                           ),
-                          // ... rest of the form fields
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _descriptionController,
+                            maxLines: 3,
+                            decoration: const InputDecoration(
+                              labelText: 'Description',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _urlController,
+                            decoration: const InputDecoration(
+                              labelText: 'Endpoint URL',
+                              border: OutlineInputBorder(),
+                            ),
+                            validator: (value) =>
+                                value?.isEmpty ?? true ? 'Required' : null,
+                          ),
+                          const SizedBox(height: 16),
+                          _buildMethodSelector(),
+                          const SizedBox(height: 24),
+                          _buildHeadersSection(),
+                          const SizedBox(height: 24),
+                          _buildParametersSection(),
+                          const SizedBox(height: 16),
+                          SwitchListTile(
+                            title: const Text('Public API'),
+                            subtitle: const Text('Make this API public'),
+                            value: _isPublic,
+                            onChanged: (value) =>
+                                setState(() => _isPublic = value),
+                          ),
                         ],
                       ),
                     ),
                   ),
                 ),
                 Expanded(
-                  flex: 3,
-                  child: Column(
-                    children: [
-                      _buildWorkspace(),
-                      const SizedBox(height: 16),
-                      _buildTestSection(),
-                    ],
-                  ),
-                ),
-                SizedBox(height: 16),
+                    flex: 3,
+                    child: Padding(
+                      padding: EdgeInsets.all(20),
+                      child: SafeArea(
+                          child: SingleChildScrollView(
+                              child: Column(
+                        children: [
+                          _buildWorkspace(),
+                          const SizedBox(height: 16),
+                          _buildTestSection(),
+                        ],
+                      ))),
+                    )),
+                const SizedBox(width: 16),
               ],
             );
           }
@@ -341,7 +363,7 @@ function handleRequest(req, res) {
       child: APIWorkspace(
         code: _apiLogic,
         onCodeChanged: (code) => setState(() => _apiLogic = code),
-        onExecute: _executeAPILogic, // Now matches the expected type
+        onExecute: _executeAPILogic,
       ),
     );
   }
@@ -455,7 +477,6 @@ function handleRequest(req, res) {
         throw response.error!;
       }
 
-      // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('API saved successfully')),
       );
@@ -470,17 +491,29 @@ function handleRequest(req, res) {
     if (!_isTestMode) return;
 
     try {
-      final request = {
-        'method': _selectedMethod,
-        'path': _urlController.text,
-        'headers': _headers,
-        'query': _parameters,
-      };
+      final uri = Uri.parse('http://localhost:8080${_urlController.text}');
+      final response = await http.get(uri);
 
-      final response = null;
+      String formattedResponse = '';
+      try {
+        final jsonData = json.decode(response.body);
+        formattedResponse =
+            const JsonEncoder.withIndent('  ').convert(jsonData);
+      } catch (e) {
+        formattedResponse = response.body;
+      }
 
       setState(() {
-        _testResponse = jsonEncode(response.toJson());
+        _testResponse = '''
+Status: ${response.statusCode}
+Time: ${DateTime.now().millisecondsSinceEpoch}ms
+
+Headers:
+${response.headers.entries.map((e) => '${e.key}: ${e.value}').join('\n')}
+
+Body:
+$formattedResponse
+''';
       });
     } catch (e) {
       setState(() => _testResponse = jsonEncode({
@@ -494,7 +527,6 @@ function handleRequest(req, res) {
     if (!_isTestMode) return;
 
     try {
-      // Create test endpoint
       final endpoint = APIEndpoint(
         id: 'test',
         userId: 'test',
@@ -507,15 +539,11 @@ function handleRequest(req, res) {
         logic: code,
       );
 
-      // Register endpoint
       _localServer.registerEndpoint(endpoint);
 
-      // Make test request
       final uri = Uri.parse('http://localhost:8080${_urlController.text}');
-
       final response = await http.get(uri);
 
-      // Format response using JSON view
       String formattedResponse = '';
       try {
         final jsonData = json.decode(response.body);
@@ -570,40 +598,5 @@ $formattedResponse
       await _startLocalServer();
     }
     setState(() => _isTestMode = !_isTestMode);
-  }
-
-  Future<bool> _verifyServerConnection() async {
-    try {
-      final client = HttpClient();
-      final request = await client.get(
-          Platform.isAndroid ? '10.0.2.2' : 'localhost', 3000, '/test');
-      final response = await request.close();
-      await response.drain();
-      return response.statusCode == 200;
-    } catch (e) {
-      print('Verification failed: $e');
-      return false;
-    }
-  }
-
-  Future<bool> _checkServerStatus() async {
-    try {
-      final result = await _localServer.isRunning;
-      return result;
-    } catch (e) {
-      return false;
-    }
-  }
-
-  void toggleTestMode() {
-    setState(() {
-      _isTestMode = !_isTestMode;
-      if (_isTestMode) {
-        _startLocalServer();
-      } else {
-        _localServer.stop();
-        _testResponse = null;
-      }
-    });
   }
 }
