@@ -5,6 +5,7 @@
 list(APPEND FLUTTER_PLUGIN_LIST
   app_links
   flutter_inappwebview_windows
+  flutter_js
   share_plus
   url_launcher_windows
   window_size

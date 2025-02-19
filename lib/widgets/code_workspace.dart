@@ -107,36 +107,11 @@ class _APIWorkspaceState extends State<APIWorkspace> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _buildConsoleHeader(),
           Expanded(
             child: ListView.builder(
               itemCount: _logs.length,
               itemBuilder: (context, index) => _logs[index].buildWidget(),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildConsoleHeader() {
-    return Padding(
-      padding: const EdgeInsets.all(8.0),
-      child: Row(
-        children: [
-          const Text(
-            'Console',
-            style: TextStyle(
-              color: Colors.white70,
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const Spacer(),
-          IconButton(
-            icon: const Icon(Icons.clear, color: Colors.white70, size: 16),
-            onPressed: () => setState(() => _logs.clear()),
-            tooltip: 'Clear console',
           ),
         ],
       ),

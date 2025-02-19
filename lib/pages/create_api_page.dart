@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:apilook/services/local_api_server.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_js/flutter_js.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:http/http.dart' as http;
 import '../models/api_endpoint.dart';
@@ -27,34 +27,27 @@ class _CreateAPIPageState extends State<CreateAPIPage> {
   bool _isPublic = false;
   String? _testResponse;
 
-  final LocalAPIServer _localServer = LocalAPIServer();
-  bool _isTestMode = false;
+  // A string that collects console log messages.
+  String _consoleLogs = '';
 
-  @override
-  void initState() {
-    super.initState();
-    _startLocalServer();
-  }
+  // The JS code that will be executed.
+  // Note: This sample code has been modified to immediately return a result.
+  String _apiLogic = '''
+// Write your API logic here
+function handleRequest() {
+  return { message: "Hello World" };
+}
+''';
+
+  final _responseExampleController = TextEditingController();
 
   @override
   void dispose() {
     _nameController.dispose();
     _descriptionController.dispose();
     _urlController.dispose();
-    _localServer.stop();
     super.dispose();
   }
-
-  String _apiLogic = '''
-// Write your API logic here
-function handleRequest(req, res) {
-  res.json({
-    message: "Hello World"
-  });
-}
-''';
-
-  final _responseExampleController = TextEditingController();
 
   @override
   Widget build(BuildContext context) {
@@ -64,13 +57,8 @@ function handleRequest(req, res) {
         actions: [
           IconButton(
             icon: const Icon(Icons.play_arrow),
-            tooltip: 'Test API',
-            onPressed: _isTestMode ? _testAPI : null,
-          ),
-          IconButton(
-            icon: Icon(_isTestMode ? Icons.stop : Icons.play_circle),
-            tooltip: _isTestMode ? 'Stop Server' : 'Start Server',
-            onPressed: _toggleTestMode,
+            tooltip: 'Run Code',
+            onPressed: () => _executeAPILogic(_apiLogic),
           ),
         ],
       ),
@@ -82,56 +70,7 @@ function handleRequest(req, res) {
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   children: [
-                    Form(
-                      key: _formKey,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          TextFormField(
-                            controller: _nameController,
-                            decoration: const InputDecoration(
-                              labelText: 'API Name',
-                              border: OutlineInputBorder(),
-                            ),
-                            validator: (value) =>
-                                value?.isEmpty ?? true ? 'Required' : null,
-                          ),
-                          const SizedBox(height: 16),
-                          TextFormField(
-                            controller: _descriptionController,
-                            maxLines: 3,
-                            decoration: const InputDecoration(
-                              labelText: 'Description',
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          TextFormField(
-                            controller: _urlController,
-                            decoration: const InputDecoration(
-                              labelText: 'Endpoint URL',
-                              border: OutlineInputBorder(),
-                            ),
-                            validator: (value) =>
-                                value?.isEmpty ?? true ? 'Required' : null,
-                          ),
-                          const SizedBox(height: 16),
-                          _buildMethodSelector(),
-                          const SizedBox(height: 24),
-                          _buildHeadersSection(),
-                          const SizedBox(height: 24),
-                          _buildParametersSection(),
-                          const SizedBox(height: 16),
-                          SwitchListTile(
-                            title: const Text('Public API'),
-                            subtitle: const Text('Make this API public'),
-                            value: _isPublic,
-                            onChanged: (value) =>
-                                setState(() => _isPublic = value),
-                          ),
-                        ],
-                      ),
-                    ),
+                    _buildForm(),
                     const SizedBox(height: 24),
                     SizedBox(
                       height: 400,
@@ -139,6 +78,8 @@ function handleRequest(req, res) {
                     ),
                     const SizedBox(height: 16),
                     _buildTestSection(),
+                    const SizedBox(height: 16),
+                    _buildConsoleSection(),
                   ],
                 ),
               ),
@@ -150,72 +91,26 @@ function handleRequest(req, res) {
                   flex: 2,
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.all(16),
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          TextFormField(
-                            controller: _nameController,
-                            decoration: const InputDecoration(
-                              labelText: 'API Name',
-                              border: OutlineInputBorder(),
-                            ),
-                            validator: (value) =>
-                                value?.isEmpty ?? true ? 'Required' : null,
-                          ),
-                          const SizedBox(height: 16),
-                          TextFormField(
-                            controller: _descriptionController,
-                            maxLines: 3,
-                            decoration: const InputDecoration(
-                              labelText: 'Description',
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          TextFormField(
-                            controller: _urlController,
-                            decoration: const InputDecoration(
-                              labelText: 'Endpoint URL',
-                              border: OutlineInputBorder(),
-                            ),
-                            validator: (value) =>
-                                value?.isEmpty ?? true ? 'Required' : null,
-                          ),
-                          const SizedBox(height: 16),
-                          _buildMethodSelector(),
-                          const SizedBox(height: 24),
-                          _buildHeadersSection(),
-                          const SizedBox(height: 24),
-                          _buildParametersSection(),
-                          const SizedBox(height: 16),
-                          SwitchListTile(
-                            title: const Text('Public API'),
-                            subtitle: const Text('Make this API public'),
-                            value: _isPublic,
-                            onChanged: (value) =>
-                                setState(() => _isPublic = value),
-                          ),
-                        ],
-                      ),
-                    ),
+                    child: _buildForm(),
                   ),
                 ),
                 Expanded(
                     flex: 3,
                     child: Padding(
-                      padding: EdgeInsets.all(20),
-                      child: SafeArea(
+                        padding: const EdgeInsets.all(30),
+                        child: SafeArea(
                           child: SingleChildScrollView(
-                              child: Column(
-                        children: [
-                          _buildWorkspace(),
-                          const SizedBox(height: 16),
-                          _buildTestSection(),
-                        ],
-                      ))),
-                    )),
+                            child: Column(
+                              children: [
+                                _buildWorkspace(),
+                                const SizedBox(height: 16),
+                                _buildTestSection(),
+                                const SizedBox(height: 16),
+                                _buildConsoleSection(),
+                              ],
+                            ),
+                          ),
+                        ))),
                 const SizedBox(width: 16),
               ],
             );
@@ -226,6 +121,56 @@ function handleRequest(req, res) {
         onPressed: _saveAPI,
         label: const Text('Save API'),
         icon: const Icon(Icons.save),
+      ),
+    );
+  }
+
+  Widget _buildForm() {
+    return Form(
+      key: _formKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextFormField(
+            controller: _nameController,
+            decoration: const InputDecoration(
+              labelText: 'API Name',
+              border: OutlineInputBorder(),
+            ),
+            validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _descriptionController,
+            maxLines: 3,
+            decoration: const InputDecoration(
+              labelText: 'Description',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _urlController,
+            decoration: const InputDecoration(
+              labelText: 'Endpoint URL',
+              border: OutlineInputBorder(),
+            ),
+            validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
+          ),
+          const SizedBox(height: 16),
+          _buildMethodSelector(),
+          const SizedBox(height: 24),
+          _buildHeadersSection(),
+          const SizedBox(height: 24),
+          _buildParametersSection(),
+          const SizedBox(height: 16),
+          SwitchListTile(
+            title: const Text('Public API'),
+            subtitle: const Text('Make this API public'),
+            value: _isPublic,
+            onChanged: (value) => setState(() => _isPublic = value),
+          ),
+        ],
       ),
     );
   }
@@ -371,41 +316,62 @@ function handleRequest(req, res) {
   Widget _buildTestSection() {
     return Column(
       children: [
-        SwitchListTile(
-          title: const Text('Test Mode'),
-          value: _isTestMode,
-          onChanged: (value) => setState(() => _isTestMode = value),
+        ElevatedButton(
+          onPressed: () => _executeAPILogic(_apiLogic),
+          child: const Text('Run Code'),
         ),
-        if (_isTestMode) ...[
-          ElevatedButton(
-            onPressed: _testAPI,
-            child: const Text('Test API'),
-          ),
-          if (_testResponse != null)
-            Card(
-              margin: const EdgeInsets.symmetric(vertical: 16),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Response:',
-                        style: TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    Text(_testResponse!),
-                  ],
-                ),
+        if (_testResponse != null)
+          Card(
+            margin: const EdgeInsets.symmetric(vertical: 16),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Result:',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  Text(_testResponse!),
+                ],
               ),
             ),
-        ],
+          ),
       ],
     );
+  }
+
+  Widget _buildConsoleSection() {
+    return Card(
+      color: Colors.black87,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        height: 150,
+        width: double.infinity,
+        child: SingleChildScrollView(
+          child: Text(
+            _consoleLogs,
+            style: const TextStyle(
+              color: Colors.greenAccent,
+              fontFamily: 'Courier',
+              fontSize: 12,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _appendToConsole(String message) {
+    setState(() {
+      _consoleLogs += message + "\n";
+    });
   }
 
   void _addHeader() {
     setState(() {
       _headers[''] = '';
     });
+    _appendToConsole("Added new header.");
   }
 
   void _updateHeaderKey(int index, String newKey) {
@@ -415,24 +381,28 @@ function handleRequest(req, res) {
       _headers.remove(oldKey);
       _headers[newKey] = value ?? '';
     });
+    _appendToConsole("Updated header key: $oldKey to $newKey.");
   }
 
   void _updateHeaderValue(String key, String value) {
     setState(() {
       _headers[key] = value;
     });
+    _appendToConsole("Updated header value for $key.");
   }
 
   void _removeHeader(String key) {
     setState(() {
       _headers.remove(key);
     });
+    _appendToConsole("Removed header: $key.");
   }
 
   void _addParameter() {
     setState(() {
       _parameters[''] = '';
     });
+    _appendToConsole("Added new parameter.");
   }
 
   void _updateParameterKey(int index, String newKey) {
@@ -442,23 +412,25 @@ function handleRequest(req, res) {
       _parameters.remove(oldKey);
       _parameters[newKey] = value ?? '';
     });
+    _appendToConsole("Updated parameter key: $oldKey to $newKey.");
   }
 
   void _updateParameterValue(String key, String value) {
     setState(() {
       _parameters[key] = value;
     });
+    _appendToConsole("Updated parameter value for $key.");
   }
 
   void _removeParameter(String key) {
     setState(() {
       _parameters.remove(key);
     });
+    _appendToConsole("Removed parameter: $key.");
   }
 
   Future<void> _saveAPI() async {
     if (!_formKey.currentState!.validate()) return;
-
     try {
       final response =
           await Supabase.instance.client.from('api_endpoints').insert({
@@ -476,127 +448,35 @@ function handleRequest(req, res) {
       if (response.error != null) {
         throw response.error!;
       }
-
+      _appendToConsole("API saved successfully.");
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('API saved successfully')),
       );
     } catch (e) {
+      _appendToConsole("Error saving API: $e");
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error saving API: $e')),
       );
     }
   }
 
-  Future<void> _testAPI() async {
-    if (!_isTestMode) return;
-
-    try {
-      final uri = Uri.parse('http://localhost:8080${_urlController.text}');
-      final response = await http.get(uri);
-
-      String formattedResponse = '';
-      try {
-        final jsonData = json.decode(response.body);
-        formattedResponse =
-            const JsonEncoder.withIndent('  ').convert(jsonData);
-      } catch (e) {
-        formattedResponse = response.body;
-      }
-
-      setState(() {
-        _testResponse = '''
-Status: ${response.statusCode}
-Time: ${DateTime.now().millisecondsSinceEpoch}ms
-
-Headers:
-${response.headers.entries.map((e) => '${e.key}: ${e.value}').join('\n')}
-
-Body:
-$formattedResponse
-''';
-      });
-    } catch (e) {
-      setState(() => _testResponse = jsonEncode({
-            'error': 'Execution failed',
-            'message': e.toString(),
-          }));
-    }
-  }
-
   Future<void> _executeAPILogic(String code) async {
-    if (!_isTestMode) return;
-
     try {
-      final endpoint = APIEndpoint(
-        id: 'test',
-        userId: 'test',
-        name: _nameController.text,
-        url: _urlController.text,
-        method: _selectedMethod,
-        headers: _headers,
-        parameters: _parameters,
-        createdAt: DateTime.now(),
-        logic: code,
-      );
-
-      _localServer.registerEndpoint(endpoint);
-
-      final uri = Uri.parse('http://localhost:8080${_urlController.text}');
-      final response = await http.get(uri);
-
-      String formattedResponse = '';
-      try {
-        final jsonData = json.decode(response.body);
-        formattedResponse =
-            const JsonEncoder.withIndent('  ').convert(jsonData);
-      } catch (e) {
-        formattedResponse = response.body;
-      }
-
+      _appendToConsole("Executing JS code...");
+      // Create a JavaScript runtime instance.
+      final runtime = getJavascriptRuntime();
+      // Append code to execute handleRequest and return its result.
+      final invocation = "$code\nhandleRequest();";
+      final result = runtime.evaluate(invocation);
       setState(() {
-        _testResponse = '''
-Status: ${response.statusCode}
-Time: ${DateTime.now().millisecondsSinceEpoch}ms
-
-Headers:
-${response.headers.entries.map((e) => '${e.key}: ${e.value}').join('\n')}
-
-Body:
-$formattedResponse
-''';
+        _testResponse = result.stringResult;
       });
+      _appendToConsole("Execution finished: ${result.stringResult}");
     } catch (e) {
-      setState(() => _testResponse = 'Error executing API logic: $e');
+      setState(() {
+        _testResponse = "Error executing JS: $e";
+      });
+      _appendToConsole("Execution error: $e");
     }
-  }
-
-  Future<void> _startLocalServer() async {
-    try {
-      await _localServer.start();
-      final endpoint = APIEndpoint(
-        id: 'test',
-        userId: 'test',
-        name: _nameController.text,
-        url: _urlController.text,
-        method: _selectedMethod,
-        headers: _headers,
-        parameters: _parameters,
-        logic: _apiLogic,
-        createdAt: DateTime.now(),
-      );
-      _localServer.registerEndpoint(endpoint);
-      setState(() => _testResponse = 'Server started successfully');
-    } catch (e) {
-      setState(() => _testResponse = 'Server error: $e');
-    }
-  }
-
-  Future<void> _toggleTestMode() async {
-    if (_isTestMode) {
-      await _localServer.stop();
-    } else {
-      await _startLocalServer();
-    }
-    setState(() => _isTestMode = !_isTestMode);
   }
 }
