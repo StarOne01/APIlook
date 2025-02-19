@@ -1,6 +1,7 @@
+import 'dart:convert';
 import 'dart:io';
 
-import 'package:apilize/services/local_api_server.dart';
+import 'package:apilook/services/local_api_server.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:http/http.dart' as http;
@@ -469,22 +470,31 @@ function handleRequest(req, res) {
     if (!_isTestMode) return;
 
     try {
-      final uri = Uri.parse(
-          'http://${Platform.isAndroid ? "10.0.2.2" : "localhost"}:3000${_urlController.text}');
+      final request = {
+        'method': _selectedMethod,
+        'path': _urlController.text,
+        'headers': _headers,
+        'query': _parameters,
+      };
 
-      final response = await http.get(uri);
-      setState(() => _testResponse = '''
-Status: ${response.statusCode}
-Headers: ${response.headers}
-Body: ${response.body}
-''');
+      final response = null;
+
+      setState(() {
+        _testResponse = jsonEncode(response.toJson());
+      });
     } catch (e) {
-      setState(() => _testResponse = 'Test failed: $e');
+      setState(() => _testResponse = jsonEncode({
+            'error': 'Execution failed',
+            'message': e.toString(),
+          }));
     }
   }
 
   Future<void> _executeAPILogic(String code) async {
-    if (_isTestMode) {
+    if (!_isTestMode) return;
+
+    try {
+      // Create test endpoint
       final endpoint = APIEndpoint(
         id: 'test',
         userId: 'test',
@@ -494,11 +504,41 @@ Body: ${response.body}
         headers: _headers,
         parameters: _parameters,
         createdAt: DateTime.now(),
-        logic: code, // Use the provided code
+        logic: code,
       );
 
+      // Register endpoint
       _localServer.registerEndpoint(endpoint);
-      await _testAPI();
+
+      // Make test request
+      final uri = Uri.parse('http://localhost:8080${_urlController.text}');
+
+      final response = await http.get(uri);
+
+      // Format response using JSON view
+      String formattedResponse = '';
+      try {
+        final jsonData = json.decode(response.body);
+        formattedResponse =
+            const JsonEncoder.withIndent('  ').convert(jsonData);
+      } catch (e) {
+        formattedResponse = response.body;
+      }
+
+      setState(() {
+        _testResponse = '''
+Status: ${response.statusCode}
+Time: ${DateTime.now().millisecondsSinceEpoch}ms
+
+Headers:
+${response.headers.entries.map((e) => '${e.key}: ${e.value}').join('\n')}
+
+Body:
+$formattedResponse
+''';
+      });
+    } catch (e) {
+      setState(() => _testResponse = 'Error executing API logic: $e');
     }
   }
 

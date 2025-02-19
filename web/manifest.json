@@ -1,6 +1,6 @@
 {
-    "name": "apilize",
-    "short_name": "apilize",
+    "name": "apilook",
+    "short_name": "apilook",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

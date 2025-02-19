@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.starone" "\0"
-            VALUE "FileDescription", "apilize" "\0"
+            VALUE "FileDescription", "apilook" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "apilize" "\0"
+            VALUE "InternalName", "apilook" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2025 com.starone. All rights reserved." "\0"
-            VALUE "OriginalFilename", "apilize.exe" "\0"
-            VALUE "ProductName", "apilize" "\0"
+            VALUE "OriginalFilename", "apilook.exe" "\0"
+            VALUE "ProductName", "apilook" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

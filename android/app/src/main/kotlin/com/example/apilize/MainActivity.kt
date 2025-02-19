@@ -1,4 +1,4 @@
-package com.starone.apilize
+package com.starone.apilook
 
 import io.flutter.embedding.android.FlutterActivity
 

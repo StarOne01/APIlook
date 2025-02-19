@@ -1,12 +1,12 @@
-import 'package:apilize/auth/auth_controller.dart';
-import 'package:apilize/dashboard.dart';
-import 'package:apilize/pages/profile_page.dart';
-import 'package:apilize/pages/requests_page.dart';
-import 'package:apilize/pages/settings_page.dart';
-import 'package:apilize/services/supabase_service.dart';
-import 'package:apilize/syntax_highlighter.dart';
-import 'package:apilize/theme.dart';
-import 'package:apilize/views/login_view.dart';
+import 'package:apilook/auth/auth_controller.dart';
+import 'package:apilook/dashboard.dart';
+import 'package:apilook/pages/profile_page.dart';
+import 'package:apilook/pages/requests_page.dart';
+import 'package:apilook/pages/settings_page.dart';
+import 'package:apilook/services/supabase_service.dart';
+import 'package:apilook/syntax_highlighter.dart';
+import 'package:apilook/theme.dart';
+import 'package:apilook/views/login_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -176,181 +176,53 @@ class RequestPage extends StatefulWidget {
 
 class _RequestsPageState extends State<RequestPage>
     with TickerProviderStateMixin {
-  // 2. Declare state variables
-  final TextEditingController _urlController = TextEditingController();
-  final TextEditingController _bodyController = TextEditingController();
+  // UI Controllers
+  late final TabController _tabController;
+  late final TextEditingController _urlController;
+  late final TextEditingController _bodyController;
+
+  // Request State
+  String _selectedMethod = 'GET';
   final Map<String, String> _headers = {};
-  String method = 'GET';
-  String _responseHeaders = '';
-  final List<RequestModel> _history = [];
   String _response = '';
   int? _statusCode;
   double? _responseTime;
-  String _selectedLanguage = 'curl';
-  @override
-  Widget build(BuildContext context) {
-    return _buildBody();
-  }
 
-  Widget _buildSpeedDial() {
-    return SpeedDial(
-      icon: Icons.add,
-      activeIcon: Icons.close,
-      backgroundColor: Theme.of(context).colorScheme.primary,
-      foregroundColor: Theme.of(context).colorScheme.onPrimary,
-      activeBackgroundColor: Theme.of(context).colorScheme.error,
-      activeForegroundColor: Theme.of(context).colorScheme.onError,
-      elevation: 8.0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      children: [
-        SpeedDialChild(
-          child: const Icon(Icons.save),
-          backgroundColor: Theme.of(context).colorScheme.secondary,
-          foregroundColor: Theme.of(context).colorScheme.onSecondary,
-          label: 'Save Collection',
-          onTap: () => _saveToCollection(),
-        ),
-        SpeedDialChild(
-          child: const Icon(Icons.code),
-          backgroundColor: Theme.of(context).colorScheme.tertiary,
-          foregroundColor: Theme.of(context).colorScheme.onTertiary,
-          label: 'Generate Code',
-          onTap: () => _showCodeGenerationSheet(),
-        ),
-      ],
-    );
-  }
-
-  late TabController _mainTabController;
-  late TabController _responseTabController;
-  late TabController _previewTabController;
-  late final WebViewController _webViewController;
+  // HTTP Methods
+  final List<String> _httpMethods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'];
 
   @override
   void initState() {
     super.initState();
-    _mainTabController = TabController(length: 2, vsync: this);
-    _responseTabController = TabController(length: 3, vsync: this);
-    _previewTabController = TabController(length: 3, vsync: this);
-    _webViewController = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(Colors.white);
+    _tabController = TabController(length: 3, vsync: this);
+    _urlController = TextEditingController();
+    _bodyController = TextEditingController();
   }
 
-  final urlController = TextEditingController();
-  String selectedMethod = 'GET';
-  String responseBody = '';
-  int? statusCode;
-  String requestBody = '';
-  int? responseStatusCode;
-  DateTime? requestStartTime;
-  Map<String, String> responseHeaders = {};
-  double? responseTime;
-  final List<RequestModel> history = [];
-  String url = '';
-
-  String body = '';
-  ResponseViewMode _responseViewMode = ResponseViewMode.prettyJson;
-  ResponseViewMode _viewMode = ResponseViewMode.prettyJson;
-  String _generatedCode = '';
-  bool get isDarkMode => Theme.of(context).brightness == Brightness.dark;
-
-  final Map<String, TextStyle> darkCodeTheme = {
-    'keyword': const TextStyle(color: Colors.blue),
-    'string': const TextStyle(color: Colors.green),
-    'number': const TextStyle(color: Colors.orange),
-    'comment': const TextStyle(color: Colors.grey),
-  };
-
-  final Map<String, TextStyle> lightCodeTheme = {
-    'keyword': const TextStyle(color: Colors.purple),
-    'string': const TextStyle(color: Colors.green),
-    'number': const TextStyle(color: Colors.blue),
-    'comment': const TextStyle(color: Colors.grey),
-  };
-  Future<void> _copyCode(String code) async {
-    await Clipboard.setData(ClipboardData(text: code));
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Code copied to clipboard')),
-    );
-  }
-
-  Future<void> _exportCode(String language, String code) async {
-    final String fileName = 'request.$language';
-    // Add export logic
-  }
-
-  Future<void> _testGeneratedCode() async {
-    // Add test logic
-  }
-
-  Future<void> _saveAsSnippet() async {
-    // Add save logic
-  }
-
-  String generateCode(String language) {
-    // Add code generation logic
-    return '';
-  }
-
-  Future<void> _saveResponse() async {
-    final String? path = await FilePicker.platform.saveFile(
-      dialogTitle: 'Save Response',
-      fileName: 'response.txt',
-    );
-
-    if (path != null) {
-      final file = File(path);
-      await file.writeAsString(responseBody);
-    }
-  }
-
-  Future<void> _handleResponse(http.Response response) async {
-    setState(() {
-      responseStatusCode = response.statusCode;
-      responseHeaders = response.headers;
-      responseBody = response.body;
-      responseTime = requestStartTime != null
-          ? DateTime.now()
-              .difference(requestStartTime!)
-              .inMilliseconds
-              .toDouble()
-          : 0.0;
-
-      // Add to history
-      history.insert(
-          0,
-          RequestModel(
-              id: DateTime.now().toString(),
-              name: url.split('/').last,
-              url: url,
-              method: method,
-              headers: _headers,
-              body: requestBody,
-              metrics: null,
-              generatedCode: null));
+  @override
+  Widget build(BuildContext context) {
+    // Responsive layout
+    return LayoutBuilder(builder: (context, constraints) {
+      if (constraints.maxWidth > 900) {
+        return _buildDesktopLayout();
+      }
+      return _buildMobileLayout();
     });
   }
 
-  Widget _buildNarrowLayout() {
+  Widget _buildDesktopLayout() {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('API Client'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.code),
-            onPressed: _showCodeGenerationSheet,
-          ),
-        ],
-      ),
-      body: Column(
+      body: Row(
         children: [
-          _buildCollapsibleUrlBar(),
+          // Left panel - Request Config
           Expanded(
-            child: _buildRequestResponseTabs(),
+            flex: 1,
+            child: _buildRequestPanel(),
+          ),
+          // Right panel - Response
+          Expanded(
+            flex: 1,
+            child: _buildResponsePanel(),
           ),
         ],
       ),
@@ -361,38 +233,250 @@ class _RequestsPageState extends State<RequestPage>
     );
   }
 
-  Widget _buildCollapsibleUrlBar() {
-    return ExpansionTile(
-      title:
-          Text(urlController.text.isEmpty ? 'Enter URL' : urlController.text),
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: _buildUrlBar(),
+  Widget _buildMobileLayout() {
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('API Client'),
+          bottom: const TabBar(
+            tabs: [
+              Tab(text: 'Request'),
+              Tab(text: 'Response'),
+            ],
+          ),
         ),
+        body: TabBarView(
+          children: [
+            _buildRequestPanel(),
+            _buildResponsePanel(),
+          ],
+        ),
+        floatingActionButton: FloatingActionButton(
+          onPressed: _sendRequest,
+          child: const Icon(Icons.send),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _sendRequest() async {
+    try {
+      setState(() {
+        _response = '';
+        _statusCode = null;
+        _responseTime = null;
+      });
+
+      final stopwatch = Stopwatch()..start();
+
+      final uri = Uri.parse(_urlController.text);
+      final request = http.Request(_selectedMethod, uri);
+
+      // Add headers
+      request.headers.addAll(_headers);
+
+      // Add body for non-GET requests
+      if (_selectedMethod != 'GET' && _bodyController.text.isNotEmpty) {
+        request.body = _bodyController.text;
+      }
+
+      // Send request
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      stopwatch.stop();
+
+      setState(() {
+        _response = response.body;
+        _statusCode = response.statusCode;
+        _responseTime = stopwatch.elapsedMilliseconds.toDouble();
+      });
+    } catch (e) {
+      setState(() {
+        _response = 'Error: ${e.toString()}';
+        _statusCode = 500;
+      });
+    }
+  }
+
+  Widget _buildRequestPanel() {
+    return Card(
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _buildMethodSelector(),
+          const SizedBox(height: 16),
+          _buildUrlField(),
+          const SizedBox(height: 16),
+          _buildHeadersSection(),
+          const SizedBox(height: 16),
+          _buildBodySection(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildResponsePanel() {
+    return Card(
+      child: Column(
+        children: [
+          _buildResponseTabs(),
+          Expanded(
+            child: _buildResponseContent(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildResponseTabs() {
+    return TabBar(
+      controller: _tabController,
+      tabs: const [
+        Tab(text: 'Pretty', icon: Icon(Icons.code)),
+        Tab(text: 'Raw', icon: Icon(Icons.text_fields)),
+        Tab(text: 'Preview', icon: Icon(Icons.preview)),
       ],
     );
   }
 
-  Widget _buildRequestResponseTabs() {
-    return DefaultTabController(
-      length: 3,
-      child: Column(
+  Widget _buildResponseContent() {
+    if (_response.isEmpty) {
+      return const Center(child: Text('No response yet'));
+    }
+
+    return TabBarView(
+      controller: _tabController,
+      children: [
+        _buildPrettyResponse(),
+        _buildRawResponse(),
+        _buildPreviewResponse(),
+      ],
+    );
+  }
+
+  Widget _buildMethodSelector() {
+    return DropdownButtonFormField<String>(
+      value: _selectedMethod,
+      decoration: const InputDecoration(
+        labelText: 'Method',
+        border: OutlineInputBorder(),
+      ),
+      items: _httpMethods.map((String method) {
+        return DropdownMenuItem<String>(
+          value: method,
+          child: Text(method),
+        );
+      }).toList(),
+      onChanged: (String? newValue) {
+        if (newValue != null) {
+          setState(() => _selectedMethod = newValue);
+        }
+      },
+    );
+  }
+
+  Widget _buildUrlField() {
+    return TextField(
+      controller: _urlController,
+      decoration: const InputDecoration(
+        labelText: 'URL',
+        hintText: 'https://api.example.com',
+        border: OutlineInputBorder(),
+        prefixIcon: Icon(Icons.link),
+      ),
+      keyboardType: TextInputType.url,
+    );
+  }
+
+  Widget _buildHeadersSection() {
+    return Card(
+      child: ExpansionTile(
+        title: const Text('Headers'),
         children: [
-          const TabBar(
-            tabs: [
-              Tab(text: 'Headers'),
-              Tab(text: 'Body'),
-              Tab(text: 'Response'),
-            ],
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: _headers.length + 1,
+            itemBuilder: (context, index) {
+              if (index == _headers.length) {
+                return ListTile(
+                  leading: const Icon(Icons.add),
+                  title: const Text('Add Header'),
+                  onTap: () {
+                    setState(() {
+                      _headers[''] = '';
+                    });
+                  },
+                );
+              }
+
+              String key = _headers.keys.elementAt(index);
+              return ListTile(
+                title: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        decoration: const InputDecoration(
+                          hintText: 'Key',
+                        ),
+                        onChanged: (value) {
+                          setState(() {
+                            String oldValue = _headers[key]!;
+                            _headers.remove(key);
+                            _headers[value] = oldValue;
+                          });
+                        },
+                        controller: TextEditingController(text: key),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        decoration: const InputDecoration(
+                          hintText: 'Value',
+                        ),
+                        onChanged: (value) {
+                          setState(() {
+                            _headers[key] = value;
+                          });
+                        },
+                        controller: TextEditingController(text: _headers[key]),
+                      ),
+                    ),
+                  ],
+                ),
+                trailing: IconButton(
+                  icon: const Icon(Icons.delete),
+                  onPressed: () {
+                    setState(() {
+                      _headers.remove(key);
+                    });
+                  },
+                ),
+              );
+            },
           ),
-          Expanded(
-            child: TabBarView(
-              children: [
-                _buildHeadersList(),
-                _buildBodyEditor(),
-                _buildResponseView(),
-              ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBodySection() {
+    return Card(
+      child: ExpansionTile(
+        title: const Text('Body'),
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: TextField(
+              controller: _bodyController,
+              maxLines: null,
+              decoration: const InputDecoration(
+                hintText: 'Request Body (JSON)',
+                border: OutlineInputBorder(),
+              ),
             ),
           ),
         ],
@@ -400,821 +484,187 @@ class _RequestsPageState extends State<RequestPage>
     );
   }
 
-  Future<void> _showCodeGenerationSheet() async {
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (BuildContext context) => _buildCodeGenerationPanel(),
-    );
-  }
-
-  Widget _buildHeadersList() {
-    return Column(
-      children: [
-        Expanded(
-          child: _headers.isEmpty
-              ? const Center(
-                  child: Text('No headers added yet'),
-                )
-              : ListView.builder(
-                  itemCount: _headers.length,
-                  itemBuilder: (context, index) {
-                    final header = _headers.entries.elementAt(index);
-                    return ListTile(
-                      title: Text(header.key),
-                      subtitle: Text(header.value),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.edit),
-                            onPressed: () =>
-                                _editHeader(header.key, header.value),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.delete),
-                            onPressed: () => setState(() {
-                              _headers.remove(header.key);
-                            }),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
+  Widget _buildResponseHeader() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: Theme.of(context).dividerColor),
         ),
-        Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: ElevatedButton.icon(
-            icon: const Icon(Icons.add),
-            label: const Text('Add Header'),
-            onPressed: _showAddHeaderDialog,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildWideLayout() {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('API Client - Wide Layout'),
       ),
-      body: Row(
+      child: Row(
         children: [
-          Expanded(child: _buildRequestResponseTabs()),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Status: ${_statusCode ?? "N/A"}',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                Text(
+                  'Time: ${_responseTime?.toStringAsFixed(2) ?? "N/A"} ms',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.copy),
+            onPressed: () => _copyToClipboard(_response),
+            tooltip: 'Copy Response',
+          ),
+          IconButton(
+            icon: const Icon(Icons.share),
+            onPressed: () => Share.share(_response),
+            tooltip: 'Share Response',
+          ),
         ],
       ),
-    );
-  }
-
-  void _handleUrlChange(String value) {
-    setState(() {
-      url = value;
-    });
-  }
-
-  void _handleBodyChange(String value) {
-    setState(() {
-      body = value;
-    });
-  }
-
-  Widget _buildUrlBar() {
-    return TextField(
-      controller: _urlController,
-      onChanged: _handleUrlChange,
-      decoration: const InputDecoration(
-        labelText: 'URL',
-        border: OutlineInputBorder(),
-      ),
-    );
-  }
-
-  Widget _buildBodyEditor() {
-    return TextField(
-      controller: _bodyController,
-      onChanged: _handleBodyChange,
-      maxLines: null,
-      decoration: const InputDecoration(
-        hintText: 'Enter request body',
-      ),
-    );
-  }
-
-  Widget _buildResponseView() {
-    if (_response.isEmpty) {
-      return const Center(
-        child: Text('Send a request to see the response'),
-      );
-    }
-
-    return Column(
-      children: [
-        TabBar(
-          controller: _responseTabController,
-          tabs: const [
-            Tab(text: 'JSON'),
-            Tab(text: 'Raw'),
-            Tab(text: 'Preview'),
-          ],
-        ),
-        Expanded(
-          child: TabBarView(
-            controller: _responseTabController,
-            children: [
-              _buildPrettyResponse(),
-              _buildRawResponse(),
-              _buildPreviewResponse(),
-            ],
-          ),
-        ),
-      ],
     );
   }
 
   Widget _buildPrettyResponse() {
-    if (_response.isEmpty) return const SizedBox();
-
     try {
-      final jsonData = json.decode(_response);
+      final dynamic parsedJson = jsonDecode(_response);
       return SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: JsonView(
-            json: jsonData,
-            theme: JsonViewTheme(
-              backgroundColor: Theme.of(context).cardColor,
-              stringStyle: const TextStyle(color: Colors.green),
-              numberStyle: const TextStyle(color: Colors.blue),
-              boolStyle: const TextStyle(color: Colors.red),
-            ),
-          ),
-        ),
-      );
-    } catch (e) {
-      return SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: Text(_response),
-        ),
-      );
-    }
-  }
-
-  Widget _buildRawResponse() {
-    final StringBuffer rawResponse = StringBuffer();
-    final uri = Uri.tryParse(_urlController.text);
-
-    // Request Section
-    rawResponse.writeln('REQUEST');
-    rawResponse.writeln('=======\n');
-    rawResponse.writeln('${method.toUpperCase()} ${uri?.path ?? ''} HTTP/1.1');
-    rawResponse.writeln('Host: ${uri?.host ?? ''}');
-
-    // Query Parameters
-    if (uri?.queryParameters.isNotEmpty ?? false) {
-      rawResponse.writeln('\nQuery Parameters:');
-      uri!.queryParameters.forEach((key, value) {
-        rawResponse.writeln('$key: $value');
-      });
-    }
-
-    // Request Headers
-    rawResponse.writeln('\nRequest Headers:');
-    rawResponse.writeln('-------------');
-    _headers.forEach((key, value) {
-      rawResponse.writeln('$key: $value');
-    });
-
-    // Request Body
-    if (_bodyController.text.isNotEmpty) {
-      rawResponse.writeln('\nRequest Body:');
-      rawResponse.writeln('-------------');
-      rawResponse.writeln(_bodyController.text);
-    }
-
-    // Response Section
-    rawResponse.writeln('\n\nRESPONSE');
-    rawResponse.writeln('========\n');
-
-    // Status Line
-    rawResponse.writeln('HTTP/1.1 $_statusCode');
-
-    // Response Headers
-    rawResponse.writeln('\nResponse Headers:');
-    rawResponse.writeln('---------------');
-    responseHeaders.forEach((key, value) {
-      rawResponse.writeln('$key: $value');
-    });
-
-    // Response Body
-    rawResponse.writeln('\nResponse Body:');
-    rawResponse.writeln('-------------');
-    rawResponse.writeln(_response);
-
-    // Metrics
-    rawResponse.writeln('\nMETRICS');
-    rawResponse.writeln('=======');
-    rawResponse
-        .writeln('Time: ${_responseTime?.toStringAsFixed(2) ?? 'N/A'} ms');
-    rawResponse.writeln('Size: ${_response.length} bytes');
-    rawResponse
-        .writeln('Content-Type: ${responseHeaders['content-type'] ?? 'N/A'}');
-
-    return SingleChildScrollView(
-      child: Container(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: SelectableText(
-          rawResponse.toString(),
-          style: TextStyle(
-            fontFamily: 'monospace',
-            fontSize: 13,
-            height: 1.5,
-            color: Theme.of(context).colorScheme.onSurface,
+        child: JsonView(
+          json: parsedJson,
+          theme: JsonViewTheme(
+            backgroundColor: Theme.of(context).cardColor,
+            stringStyle: const TextStyle(color: Colors.green),
+            numberStyle: const TextStyle(color: Colors.blue),
+            boolStyle: const TextStyle(color: Colors.red),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildPreviewResponse() {
-    if (_response.isEmpty) return const SizedBox();
-
-    try {
-      final dynamic jsonData = json.decode(_response);
-
-      if (jsonData is List) {
-        return _buildJsonTable(jsonData);
-      } else if (jsonData is Map) {
-        return _buildJsonTable([jsonData]);
-      } else {
-        return Center(
-            child: Text('Cannot display as table: ${jsonData.runtimeType}'));
-      }
+      );
     } catch (e) {
       return Center(child: Text('Invalid JSON: $e'));
     }
   }
 
-  Widget _buildJsonTable(List<dynamic> data) {
-    if (data.isEmpty) return const Center(child: Text('No data'));
-
-    // Get all unique keys from all objects
-    final Set<String> keys = {};
-    for (var item in data) {
-      if (item is Map) {
-        keys.addAll(item.keys.map((e) => e.toString()));
-      }
-    }
-
+  Widget _buildRawResponse() {
     return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: SingleChildScrollView(
-        child: DataTable(
-          columns: keys
-              .map(
-                (key) => DataColumn(
-                  label: Text(
-                    key,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-              )
-              .toList(),
-          rows: data.map((item) {
-            if (item is! Map)
-              return DataRow(cells: [DataCell(Text(item.toString()))]);
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Status and timing info
+          Text(
+            'Status Code: ${_statusCode ?? "N/A"}',
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          Text(
+            'Response Time: ${_responseTime?.toStringAsFixed(2) ?? "N/A"} ms',
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
 
-            return DataRow(
-              cells: keys.map((key) {
-                final value = item[key];
-                String displayText = '';
+          // Headers section
+          const Text(
+            'Headers:',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+          const SizedBox(height: 8),
+          for (var header in _headers.entries)
+            Text('${header.key}: ${header.value}'),
+          const SizedBox(height: 16),
 
-                if (value == null) {
-                  displayText = 'null';
-                } else if (value is Map || value is List) {
-                  displayText = json.encode(value);
-                } else {
-                  displayText = value.toString();
-                }
-
-                return DataCell(
-                  Text(
-                    displayText,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  onTap: () {
-                    if (value is Map || value is List) {
-                      showDialog(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: Text(key),
-                          content: SingleChildScrollView(
-                            child: Text(
-                              const JsonEncoder.withIndent('  ').convert(value),
-                            ),
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(context),
-                              child: const Text('Close'),
-                            ),
-                          ],
-                        ),
-                      );
-                    }
-                  },
-                );
-              }).toList(),
-            );
-          }).toList(),
-        ),
+          // Response body
+          const Text(
+            'Body:',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+          const SizedBox(height: 8),
+          SelectableText(
+            _response,
+            style: const TextStyle(
+              fontFamily: 'monospace',
+              fontSize: 14,
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildCodeGenerationPanel() {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Language selector at the top
-            _buildLanguageSelector(),
-            const SizedBox(height: 16),
-
-            // Code preview in scrollable container
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.grey[900],
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: SingleChildScrollView(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: SelectableText(
-                      _generateCode(_selectedLanguage),
-                      style: const TextStyle(
-                        fontFamily: 'monospace',
-                        color: Colors.white,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-            // Action buttons at bottom
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.copy),
-                  tooltip: 'Copy to clipboard',
-                  onPressed: () => _copyCode(_generateCode(_selectedLanguage)),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.download),
-                  tooltip: 'Download code',
-                  onPressed: () => _exportCode(
-                      _selectedLanguage, _generateCode(_selectedLanguage)),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.share),
-                  tooltip: 'Share code',
-                  onPressed: () =>
-                      Share.share(_generateCode(_selectedLanguage)),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
+  void _copyToClipboard(String text) {
+    Clipboard.setData(ClipboardData(text: text));
   }
 
-  Widget _buildLanguageSelector() {
-    return SegmentedButton<String>(
-      segments: [
-        ButtonSegment(value: 'curl', label: const Text('cURL')),
-        ButtonSegment(value: 'dart', label: const Text('Dart')),
-        ButtonSegment(value: 'python', label: const Text('Python')),
-        ButtonSegment(value: 'javascript', label: const Text('JS')),
-      ],
-      selected: {_selectedLanguage},
-      onSelectionChanged: (Set<String> value) {
-        setState(() {
-          _selectedLanguage = value.first;
-          _generatedCode = generateCode(_selectedLanguage);
-        });
-      },
-    );
-  }
-
-  Future<void> _sendRequest() async {
-    setState(() {
-      _statusCode = null;
-      _response = '';
-      _responseTime = null;
-    });
-
-    final startTime = DateTime.now();
+  Widget _buildPreviewResponse() {
+    if (_response.isEmpty) {
+      return const Center(child: Text('No response to preview'));
+    }
 
     try {
-      final uri = Uri.parse(_urlController.text);
-      http.Response response;
+      // Try to parse JSON
+      final dynamic parsedJson = jsonDecode(_response);
 
-      switch (method.toUpperCase()) {
-        case 'GET':
-          response = await http.get(uri, headers: _headers);
-          break;
-        case 'POST':
-          response = await http.post(uri,
-              headers: _headers, body: _bodyController.text);
-          break;
-        case 'PUT':
-          response = await http.put(uri,
-              headers: _headers, body: _bodyController.text);
-          break;
-        case 'DELETE':
-          response = await http.delete(uri, headers: _headers);
-          break;
-        default:
-          throw ArgumentError('Unsupported HTTP method: $method');
-      }
+      // If it's a list of maps, show as table
+      if (parsedJson is List &&
+          parsedJson.isNotEmpty &&
+          parsedJson.first is Map) {
+        // Get columns from first item
+        final columns = (parsedJson.first as Map).keys.toList();
 
-      final endTime = DateTime.now();
-
-      setState(() {
-        _statusCode = response.statusCode;
-        _responseHeaders = response.headers.toString();
-        _response = response.body;
-        _responseTime = endTime.difference(startTime).inMilliseconds.toDouble();
-        _history.insert(
-          0,
-          RequestModel(
-            id: DateTime.now().toString(),
-            name: uri.path.split('/').last,
-            url: _urlController.text,
-            method: method,
-            headers: Map<String, dynamic>.from(_headers),
-            body: _bodyController.text,
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: SingleChildScrollView(
+            child: DataTable(
+              columns: columns
+                  .map((col) => DataColumn(label: Text(col.toString())))
+                  .toList(),
+              rows: parsedJson.map<DataRow>((item) {
+                return DataRow(
+                  cells: columns
+                      .map((col) => DataCell(Text(item[col]?.toString() ?? '')))
+                      .toList(),
+                );
+              }).toList(),
+            ),
           ),
         );
-      });
+      }
+
+      // If it's a single map, show as key-value pairs
+      if (parsedJson is Map) {
+        return SingleChildScrollView(
+          child: DataTable(
+            columns: const [
+              DataColumn(label: Text('Key')),
+              DataColumn(label: Text('Value')),
+            ],
+            rows: parsedJson.entries
+                .map((entry) => DataRow(cells: [
+                      DataCell(Text(entry.key.toString())),
+                      DataCell(Text(entry.value?.toString() ?? '')),
+                    ]))
+                .toList(),
+          ),
+        );
+      }
     } catch (e) {
-      setState(() {
-        _response = 'Error: $e';
-      });
-    }
-  }
-
-  Future<void> _showAddHeaderDialog() async {
-    final keyController = TextEditingController();
-    final valueController = TextEditingController();
-
-    await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add Header'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: keyController,
-              decoration: const InputDecoration(labelText: 'Key'),
-            ),
-            TextField(
-              controller: valueController,
-              decoration: const InputDecoration(labelText: 'Value'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              setState(() {
-                _headers[keyController.text] = valueController.text;
-              });
-              Navigator.pop(context);
-            },
-            child: const Text('Add'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _editHeader(String key, String value) async {
-    final keyController = TextEditingController(text: key);
-    final valueController = TextEditingController(text: value);
-
-    await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Edit Header'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: keyController,
-              decoration: const InputDecoration(labelText: 'Key'),
-            ),
-            TextField(
-              controller: valueController,
-              decoration: const InputDecoration(labelText: 'Value'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              setState(() {
-                _headers.remove(key);
-                _headers[keyController.text] = valueController.text;
-              });
-              Navigator.pop(context);
-            },
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _generateCode(String language) {
-    final StringBuffer code = StringBuffer();
-
-    switch (language) {
-      case 'curl':
-        code.write('curl -X $method ');
-        _headers.forEach((key, value) {
-          code.write('-H "$key: $value" ');
-        });
-        if (body.isNotEmpty) {
-          code.write('-d \'$body\' ');
-        }
-        code.write('"$url"');
-        break;
-
-      case 'python':
-        code.writeln('import requests\n');
-        code.writeln('url = "$url"');
-        if (_headers.isNotEmpty) {
-          code.writeln('headers = ${_headers.toString()}');
-        }
-        if (body.isNotEmpty) {
-          code.writeln('payload = \'$body\'');
-        }
-        code.writeln('\nresponse = requests.${method.toLowerCase()}(');
-        code.writeln('    url,');
-        if (_headers.isNotEmpty) code.writeln('    headers=headers,');
-        if (body.isNotEmpty) code.writeln('    data=payload,');
-        code.writeln(')');
-        code.writeln('\nprint(response.status_code)');
-        code.writeln('print(response.text)');
-        break;
-
-      default:
-        code.write('Unsupported language');
-    }
-
-    return code.toString();
-  }
-
-  Widget _buildCodePreview() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.grey[900],
-        borderRadius: BorderRadius.circular(8),
-      ),
-      padding: const EdgeInsets.all(16),
-      child: SingleChildScrollView(
-        child: SelectableText(
-          _generateCode(_selectedLanguage),
-          style: const TextStyle(
-            fontFamily: 'monospace',
-            color: Colors.white,
-            fontSize: 14,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCodeActions() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.end,
-      children: [
-        IconButton(
-          icon: const Icon(Icons.copy),
-          tooltip: 'Copy to clipboard',
-          onPressed: () {
-            Clipboard.setData(ClipboardData(
-              text: _generateCode(_selectedLanguage),
-            ));
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Code copied to clipboard')),
-            );
-          },
-        ),
-        IconButton(
-          icon: const Icon(Icons.download),
-          tooltip: 'Download code',
-          onPressed: () async {
-            try {
-              final code = _generateCode(_selectedLanguage);
-              final extension = _selectedLanguage == 'curl'
-                  ? 'sh'
-                  : _selectedLanguage == 'python'
-                      ? 'py'
-                      : 'txt';
-              final directory = await getApplicationDocumentsDirectory();
-              final file = File('${directory.path}/request.$extension');
-              await file.writeAsString(code);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Saved to ${file.path}')),
-              );
-            } catch (e) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Error saving file: $e')),
-              );
-            }
-          },
-        ),
-        IconButton(
-          icon: const Icon(Icons.share),
-          tooltip: 'Share code',
-          onPressed: () {
-            Share.share(_generateCode(_selectedLanguage));
-          },
-        ),
-      ],
-    );
-  }
-
-  Future<void> _saveToCollection() async {
-    final nameController = TextEditingController();
-
-    final bool? result = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Save to Collection'),
-        content: TextField(
-          controller: nameController,
-          decoration: const InputDecoration(
-              labelText: 'Collection Name', hintText: 'Enter collection name'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    );
-
-    if (result == true && mounted) {
-      try {
-        final collection = {
-          'name': nameController.text,
-          'request': {
-            'url': urlController.text,
-            'method': selectedMethod,
-            'headers': _headers,
-            'body': requestBody,
-          }
-        };
-
-        // Save to local storage
-        final prefs = await SharedPreferences.getInstance();
-        final collections = prefs.getStringList('collections') ?? [];
-        collections.add(jsonEncode(collection));
-        await prefs.setStringList('collections', collections);
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Saved to collection')),
+      // If not valid JSON, try other formats
+      if (_response.trim().startsWith('<')) {
+        return WebViewWidget(
+          controller: WebViewController()
+            ..loadHtmlString(_response)
+            ..setBackgroundColor(Theme.of(context).scaffoldBackgroundColor),
         );
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error saving: $e')),
+      } else if (_response.trim().startsWith('data:image')) {
+        return Center(
+          child: Image.memory(
+            base64Decode(_response.split(',')[1]),
+            errorBuilder: (context, error, stackTrace) =>
+                const Text('Unable to preview image'),
+          ),
         );
       }
     }
-  }
 
-  Widget _buildBody() {
-    return Padding(
-        padding: const EdgeInsets.all(16.0),
-        child:
-            Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          // Request Section
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // URL and Method Row
-                  Row(
-                    children: [
-                      // Method Dropdown
-                      DropdownButton<String>(
-                        value: method,
-                        items: ['GET', 'POST', 'PUT', 'DELETE']
-                            .map((e) =>
-                                DropdownMenuItem(value: e, child: Text(e)))
-                            .toList(),
-                        onChanged: (value) => setState(() => method = value!),
-                      ),
-                      const SizedBox(width: 16),
-                      // URL TextField
-                      Expanded(
-                        child: TextField(
-                          controller: _urlController,
-                          decoration: const InputDecoration(
-                            labelText: 'URL',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  // Headers Section
-                  ExpansionTile(
-                    title: const Text('Headers'),
-                    children: [
-                      _buildHeadersList(),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  // Body Section
-                  ExpansionTile(
-                    title: const Text('Request Body'),
-                    children: [
-                      TextField(
-                        controller: _bodyController,
-                        maxLines: 5,
-                        decoration: const InputDecoration(
-                          border: OutlineInputBorder(),
-                          hintText: 'Enter request body',
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          // Send Button
-          ElevatedButton(
-            onPressed: _sendRequest,
-            child: const Text('Send Request'),
-          ),
-          const SizedBox(height: 16),
-          // Response Section
-          if (_response.isNotEmpty)
-            Expanded(
-              child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Status: $_statusCode'),
-                      if (_responseTime != null)
-                        Text('Time: ${_responseTime!.toStringAsFixed(2)}ms'),
-                      const Divider(),
-                      Expanded(child: _buildResponseView()),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-        ]));
+    // Fallback to raw view
+    return _buildRawResponse();
   }
 }

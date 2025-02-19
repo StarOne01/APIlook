@@ -48,7 +48,7 @@ class SupabaseService {
         email: email,
         password: password,
         emailRedirectTo:
-            kIsWeb ? null : 'io.supabase.apilize://signup-callback',
+            kIsWeb ? null : 'io.supabase.apilook://signup-callback',
       );
       return response;
     } catch (e) {
@@ -65,7 +65,7 @@ class SupabaseService {
     try {
       final response = await client.auth.signInWithOAuth(
         OAuthProvider.google,
-        redirectTo: 'io.supabase.apilize://login-callback',
+        redirectTo: 'io.supabase.apilook://login-callback',
         scopes: 'email,profile',
       );
       return AuthResponse(session: null, user: null);
@@ -83,7 +83,7 @@ class SupabaseService {
     try {
       await client.auth.signInWithOAuth(
         OAuthProvider.github,
-        redirectTo: 'io.supabase.apilize://login-callback',
+        redirectTo: 'io.supabase.apilook://login-callback',
         scopes: 'user,email',
       );
       // Return empty AuthResponse since OAuth flow is handled externally
@@ -119,7 +119,7 @@ class SupabaseService {
     try {
       final signInResult = await client.auth.signInWithOAuth(
         OAuthProvider.google,
-        redirectTo: 'io.supabase.apilize://callback',
+        redirectTo: 'io.supabase.apilook://callback',
         queryParams: {
           'access_type': 'offline',
           'prompt': 'consent',
@@ -151,7 +151,7 @@ class SupabaseService {
     try {
       await client.auth.signInWithOAuth(
         OAuthProvider.github,
-        redirectTo: kIsWeb ? null : 'io.supabase.apilize://login-callback',
+        redirectTo: kIsWeb ? null : 'io.supabase.apilook://login-callback',
       );
       // Return empty AuthResponse since OAuth flow is handled externally
       return AuthResponse(session: null, user: null);
@@ -181,7 +181,7 @@ class SupabaseService {
     try {
       await client.auth.resetPasswordForEmail(
         email,
-        redirectTo: kIsWeb ? null : 'io.supabase.apilize://reset-callback',
+        redirectTo: kIsWeb ? null : 'io.supabase.apilook://reset-callback',
       );
     } catch (e) {
       throw ServiceException(

@@ -1,6 +1,6 @@
-name: apilize
+name: apilook
 description: |
-  Apilize is a powerful Flutter project designed for managing and interacting with APIs. 
+  apilook is a powerful Flutter project designed for managing and interacting with APIs. 
   It provides a user-friendly interface and robust functionality to streamline API operations.
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
@@ -56,6 +56,8 @@ dependencies:
   shelf: ^1.4.2
   code_editor: ^2.1.0
   flutter_highlight: ^0.7.0
+  shared_preferences: ^2.5.2
+  fl_chart: ^0.70.2
 
 dev_dependencies:
   flutter_test:

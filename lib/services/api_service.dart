@@ -1,5 +1,5 @@
-import 'package:apilize/models/api_endpoint.dart';
-import 'package:apilize/utils/exceptions/service_exception.dart';
+import 'package:apilook/models/api_endpoint.dart';
+import 'package:apilook/utils/exceptions/service_exception.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class APIService {

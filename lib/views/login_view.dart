@@ -139,7 +139,7 @@ class _LoginFormState extends State<LoginForm> {
           const Icon(Icons.api, size: 64),
           const SizedBox(height: 32),
           Text(
-            'Welcome to APIlize',
+            'Welcome to apilook',
             style: Theme.of(context).textTheme.headlineMedium,
           ),
           const SizedBox(height: 32),
