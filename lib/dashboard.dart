@@ -127,10 +127,10 @@ class Dashboard extends StatelessWidget {
       itemCount: 4,
       itemBuilder: (context, index) {
         final stats = [
-          {'title': 'Total Requests', 'value': '1,234', 'color': Colors.blue},
-          {'title': 'Success Rate', 'value': '98%', 'color': Colors.green},
+          {'title': 'Total Requests', 'value': '100', 'color': Colors.blue},
+          {'title': 'Success Rate', 'value': '88%', 'color': Colors.green},
           {'title': 'Avg Response', 'value': '245ms', 'color': Colors.orange},
-          {'title': 'Active APIs', 'value': '12', 'color': Colors.purple},
+          {'title': 'Active APIs', 'value': '2', 'color': Colors.purple},
         ];
         return _buildStatCard(
           stats[index]['title']! as String,
@@ -142,7 +142,8 @@ class Dashboard extends StatelessWidget {
   }
 
   Widget _buildQuickActions(BuildContext context, bool isDesktop) {
-    return Wrap(
+    return Center(
+        child: Wrap(
       spacing: 16,
       runSpacing: 16,
       children: [
@@ -165,8 +166,24 @@ class Dashboard extends StatelessWidget {
           ),
           isDesktop,
         ),
+        _buildActionCard(
+          context,
+          'History of API calls',
+          Icons.history,
+          Colors.blue,
+          () {},
+          isDesktop,
+        ),
+        _buildActionCard(
+          context,
+          'Colab',
+          Icons.people,
+          Colors.blue,
+          () {},
+          isDesktop,
+        ),
       ],
-    );
+    ));
   }
 
   Widget _buildActionCard(BuildContext context, String title, IconData icon,
@@ -270,7 +287,7 @@ class Dashboard extends StatelessWidget {
             Text(
               value,
               style: TextStyle(
-                fontSize: 24,
+                fontSize: 30,
                 fontWeight: FontWeight.bold,
                 color: color,
               ),
@@ -278,7 +295,7 @@ class Dashboard extends StatelessWidget {
             Text(
               title,
               style: const TextStyle(
-                fontSize: 10,
+                fontSize: 20,
                 fontWeight: FontWeight.w500,
               ),
             ),
