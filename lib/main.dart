@@ -25,9 +25,8 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   final supabaseService = SupabaseService(
-    supabaseUrl: "https://cpowvsbphxtlkfxgmrjn.supabase.co",
-    supabaseKey:
-        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwb3d2c2JwaHh0bGtmeGdtcmpuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzk2MDk3NTAsImV4cCI6MjA1NTE4NTc1MH0.JCT8q8wCudvenI_vk_wOP6ocEknTpRU0i5DqqTVX9lQ",
+    supabaseUrl: "",
+    supabaseKey:""
   );
   await supabaseService.initialize();
 
